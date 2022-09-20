@@ -1,0 +1,9 @@
+name: automata
+version: 0.1.0
+
+authors:
+  - Gaurav Shah <gauravshah.89@gmail.com>
+
+crystal: 1.5.1
+
+license: MIT
