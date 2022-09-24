@@ -1,2 +1,2 @@
 require "spec"
-require "../src/automata"
+require "../src/panini"
