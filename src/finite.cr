@@ -1,65 +1,69 @@
 module Panini::Finite
-  # macro assert_valid_start_state(type)
-  #   {% if type == :deterministic %}
-  #     raise ArgumentError.new("Invalid start state") unless @states.includes? start_state
-  #   {% elsif type == :non_deterministic %}
-  #     raise ArgumentError.new("Invalid start state") unless @states.superset_of? start_state
-  #   {% else %}
-  #     raise ArgumentError.new("Invalid automaton type")
-  #   {% end %}
-  # end
-
-  # macro assert_valid_accepting_states
-  #   raise ArgumentError.new("Invalid accepting state(s)") unless @states.superset_of? accepting_states
-  # end
-
-  # macro assert_valid_transitions(type)
-  #   raise ArgumentError.new("Invalid transition(s)") unless @transitions.all? do |antecedent, input_consequent_mapping|
-  #     @states.includes?(antecedent) && input_consequent_mapping.all? do |input, consequents|
-  #       valid_symbols = @symbols.includes?(input)
-  #       {% if type == :deterministic %}
-  #         valid_symbols && @states.includes?(consequents)
-  #       {% elsif type == :non_deterministic %}
-  #         valid_symbols && @states.superset_of?(consequents)
-  #       {% else %}
-  #         raise "Invalid automaton type"
-  #       {% end %}
-  #     end
-  #   end
-  # end
-
-  # macro assert_no_missing_transitions
-  #   raise ArgumentError.new("No transitions provided!") if @transitions.empty?
-
-  #   raise ArgumentError.new("Missing transition(s)") unless states.all? do |state|
-  #     @transitions.has_key?(state) && @symbols.all? do |sym|
-  #       @transitions[state].has_key?(sym)
-  #     end
-  #   end
-  # end
-
-  # macro assert_valid_symbol
-  #   raise ArgumentError.new("Unknown symbol") unless @symbols.includes? input_symbol
-  # end
-
   abstract class Automaton
     @[AlwaysInline]
-    def self.assert_valid_symbol(symbol, symbols)
-      raise ArgumentError.new("Unknown symbol") unless symbols.includes? symbol
+    private def assert_valid_start_state(start_state)
+      raise ArgumentError.new("Invalid start state") unless valid? start_state
     end
 
     @[AlwaysInline]
-    def self.assert_valid_accepting_states(accepting_states, states)
-      raise ArgumentError.new("Invalid accepting state(s)") unless states.superset_of? accepting_states
+    private def assert_valid_transitions
+      raise ArgumentError.new("Invalid transition(s)") unless @transitions.all? do |antecedent, input_consequent_mapping|
+        @states.includes?(antecedent) && input_consequent_mapping.all? do |input, consequent|
+          (@symbols.includes?(input) || @epsilon && input.empty?) && valid? consequent
+        end
+      end
     end
 
     @[AlwaysInline]
-    def self.assert_no_missing_transitions(transitions, states, symbols)
-      raise ArgumentError.new("No transitions provided!") if transitions.empty?
+    private def assert_valid_symbol(symbol)
+      raise ArgumentError.new("Unknown symbol: #{symbol}") unless (@symbols.includes?(symbol) || @epsilon && symbol.empty?)
+    end
 
-      raise ArgumentError.new("Missing transition(s)") unless states.all? do |state|
-        transitions.has_key?(state) && symbols.all? do |sym|
-          transitions[state].has_key?(sym)
+    @[AlwaysInline]
+    private def assert_valid_accepting_states(accepting_states)
+      raise ArgumentError.new("Invalid accepting state(s)") unless @states.superset_of? accepting_states
+    end
+
+    @[AlwaysInline]
+    private def assert_no_missing_transitions
+      raise ArgumentError.new("No transitions provided!") if @transitions.empty?
+
+      raise ArgumentError.new("Missing transition(s)") unless @states.all? do |state|
+        @transitions.has_key?(state) && @symbols.all? do |sym|
+          @transitions[state].has_key?(sym) || @epsilon && @transitions[state].has_key?("")
+        end
+      end
+    end
+
+    # transitions may be glued together, here we separate them
+    private def preprocess(transitions)
+      # if typeof(transitions) == Hash(State, Hash(Token, State)) ||
+      #    typeof(transitions) == Hash(State, Hash(Token, Set(State)))
+      #   return transitions
+      # end
+
+      transitions.map do |antecedent, inputs_consequent_mapping|
+        input_consequent_mapping = {} of Token => typeof(transitions.first[1].first[1])
+
+        inputs_consequent_mapping.each do |inputs, consequent|
+          if inputs.is_a? Array
+            inputs.each do |sym|
+              input_consequent_mapping[sym] = consequent
+            end
+          else
+            input_consequent_mapping[inputs] = consequent
+          end
+        end
+
+        {antecedent, input_consequent_mapping}
+      end.to_h
+    end
+
+    @[AlwaysInline]
+    private def epsilon_transitions_present?
+      @transitions.any? do |antecedent, input_consequent_mapping|
+        input_consequent_mapping.any? do |input, consequent|
+          next true if input.empty?
         end
       end
     end
@@ -83,20 +87,6 @@ module Panini::Finite
   end
 
   class Deterministic < Automaton
-    @[AlwaysInline]
-    def self.assert_valid_start_state(start_state, states)
-      raise ArgumentError.new("Invalid start state") unless states.includes? start_state
-    end
-
-    @[AlwaysInline]
-    def self.assert_valid_transitions(transitions, states, symbols)
-      raise ArgumentError.new("Invalid transition(s)") unless transitions.all? do |antecedent, input_consequent_mapping|
-        states.includes?(antecedent) && input_consequent_mapping.all? do |input, consequents|
-          symbols.includes?(input) && states.includes?(consequents)
-        end
-      end
-    end
-
     getter current : State
 
     @states : Set(State)
@@ -104,13 +94,25 @@ module Panini::Finite
     @transitions : Hash(State, Hash(Token, State))
     @start : State
     @accepts : Set(State)
+    @epsilon : Bool
+
+    @[AlwaysInline]
+    private def valid?(state : State)
+      @states.includes? state
+    end
 
     # TODO: can use StringPool for Token tokens ?
     def initialize(@states, @symbols, @transitions, start_state, accepting_states)
-      Deterministic.assert_valid_start_state(start_state, @states)
-      Automaton.assert_valid_accepting_states(accepting_states, states)
-      Deterministic.assert_valid_transitions(@transitions, @states, @symbols)
-      Automaton.assert_no_missing_transitions(@transitions,  @states, @symbols)
+      assert_valid_start_state(start_state)
+      assert_valid_accepting_states(accepting_states)
+
+      @transitions = preprocess transitions
+
+      raise ArgumentError.new("DFA can't have epsilon transitions!") if epsilon_transitions_present?
+      @epsilon = false
+
+      assert_valid_transitions
+      assert_no_missing_transitions
 
       @current = @start = start_state
       @accepts = accepting_states
@@ -120,7 +122,7 @@ module Panini::Finite
     private def delta(state, input_symbol : Token)
       return state if input_symbol.empty?
 
-      Automaton.assert_valid_symbol(input_symbol, @symbols)
+      assert_valid_symbol(input_symbol)
       @transitions[state][input_symbol]
     end
 
@@ -162,20 +164,6 @@ module Panini::Finite
   end
 
   class NonDeterministic < Automaton
-    @[AlwaysInline]
-    def self.assert_valid_start_state(start_state, states)
-      raise ArgumentError.new("Invalid start state") unless states.superset_of? start_state
-    end
-
-    @[AlwaysInline]
-    def self.assert_valid_transitions(transitions, states, symbols, epsilon = false)
-      raise ArgumentError.new("Invalid transition(s)") unless transitions.all? do |antecedent, input_consequent_mapping|
-        states.includes?(antecedent) && input_consequent_mapping.all? do |input, consequents|
-          symbols.includes?(input) && states.superset_of?(consequents)
-        end
-      end
-    end
-
     getter current : Set(State)
 
     @states : Set(State)
@@ -183,29 +171,71 @@ module Panini::Finite
     @transitions : Hash(State, Hash(Token, Set(State)))
     @start : Set(State)
     @accepts : Set(State)
+    @epsilon : Bool
+
+    @[AlwaysInline]
+    private def valid?(state_set : Set(State))
+      @states.superset_of? state_set
+    end
 
     # TODO: can use StringPool for Token tokens ?
-    def initialize(@states, @symbols, @transitions, start_state, accepting_states)
-      NonDeterministic.assert_valid_start_state(start_state, @states)
-      Automaton.assert_valid_accepting_states(accepting_states, @states)
-      NonDeterministic.assert_valid_transitions(@transitions, @states, @symbols)
-      Automaton.assert_no_missing_transitions(@transitions,  @states, @symbols)
+    def initialize(@states, @symbols, transitions, start_state, accepting_states)
+      assert_valid_start_state(start_state)
+      assert_valid_accepting_states(accepting_states)
+
+      @transitions = preprocess transitions
+      @epsilon = epsilon_transitions_present?
+
+      assert_valid_transitions
+      # assert_no_missing_transitions
+
 
       @current = @start = start_state
       @accepts = accepting_states
     end
 
-    # delta
-    private def delta(state, input_symbol : Token)
-      return Set{state} if input_symbol.empty?
+    def epsilon_closure(state : State)
+      closure = Set{state}
+      return closure unless @epsilon
 
-      Automaton.assert_valid_symbol(input_symbol, @symbols)
-      @transitions[state][input_symbol]
+      queue = [state]
+      loop do
+        current = queue.shift
+
+        next_states = delta(current)
+        queue.concat(next_states - closure)
+        closure.concat(next_states)
+
+        break if queue.empty?
+      end
+
+      closure
+    end
+
+    def epsilon_closure(state_set : Set(State))
+      return state_set unless @epsilon
+
+      state_set.reduce Set(State).new do |closure_union, state|
+        closure_union | epsilon_closure(state)
+      end
+    end
+
+    # delta
+    private def delta(state, input_symbol = "")
+      return Set{state} if !@epsilon && input_symbol.empty?
+
+      assert_valid_symbol(input_symbol)
+
+      if @transitions[state]?.nil? || @transitions[state][input_symbol]?.nil?
+        Set(State).new
+      else
+        @transitions[state][input_symbol]
+      end
     end
 
     # delta cap
     private def delta(state, input_symbols : Array(Token))
-      return Set{state} if input_symbols.empty?
+      return epsilon_closure(state) if input_symbols.empty?
 
       consequents = delta(state, input_symbols[0])
 
@@ -215,15 +245,15 @@ module Panini::Finite
     end
 
     def process(input_symbol : Token)
-      @current = @current.reduce Set(State).new do |consequents_union, antecedent|
-        consequents_union | delta(antecedent, input_symbol)
+      @current = epsilon_closure(@current).reduce Set(State).new do |consequents_union, antecedent|
+        consequents_union | epsilon_closure(delta antecedent, input_symbol)
       end
       self
     end
 
     def process(input_symbols : Array(Token))
-      @current = @current.reduce Set(State).new do |consequents_union, antecedent|
-        consequents_union | delta(antecedent, input_symbols)
+      @current = epsilon_closure(@current).reduce Set(State).new do |consequents_union, antecedent|
+        consequents_union | epsilon_closure(delta antecedent, input_symbols)
       end
       self
     end
@@ -267,5 +297,54 @@ module Panini::Finite
       Deterministic.new(dfa_states, @symbols, dfa_transitions, dfa_start, dfa_accepts)
     end
   end
+
+  # class EpsilonNonDeterministic < NonDeterministic
+  #   def initialize(@states, @symbols, @transitions, start_state, accepting_states)
+  #     assert_valid_start_state(start_state)
+  #     assert_valid_accepting_states(accepting_states)
+  #     assert_valid_transitions(epsilon: true)
+  #     assert_no_missing_transitions(epsilon: true)
+
+  #     @current = @start = start_state
+  #     @accepts = accepting_states
+  #   end
+
+  #   # delta
+  #   private def delta(state, input_symbol : Token)
+  #     assert_valid_symbol(input_symbol)
+  #     @transitions[state][input_symbol]
+  #   end
+
+  #   @[AlwaysInline]
+  #   private def epsilon_closure(state)
+  #     @transitions[state][""]
+  #   end
+
+  #   # delta cap
+  #   private def delta(state, input_symbols : Array(Token))
+  #     return epsilon_closure(state) if input_symbols.empty?
+
+  #     consequents = delta(state, input_symbols[0])
+
+  #     consequents.reduce Set(State).new do |states_union, consequent|
+  #       states_union | delta(consequent, input_symbols[1..])
+  #     end
+  #   end
+
+  #   def process(input_symbol : Token)
+  #     @current = @current.reduce Set(State).new do |consequents_union, antecedent|
+  #       consequents_union | epsilon_closure(delta(antecedent, input_symbol))
+  #     end
+  #     self
+  #   end
+
+  #   def process(input_symbols : Array(Token))
+  #     @current = @current.reduce Set(State).new do |consequents_union, antecedent|
+  #       consequents_union | epsilon_closure(delta(antecedent, input_symbols))
+  #     end
+  #     self
+  #   end
+
+  # end
 
 end
