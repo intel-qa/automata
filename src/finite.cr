@@ -1,5 +1,7 @@
-module Panini::Finite
-  abstract class Automaton
+module Panini::Automaton
+  abstract class Finite
+    SINK_STATE = "sink_state"
+
     @[AlwaysInline]
     private def assert_valid_start_state(start_state)
       raise ArgumentError.new("Invalid start state") unless valid? start_state
@@ -9,14 +11,14 @@ module Panini::Finite
     private def assert_valid_transitions
       raise ArgumentError.new("Invalid transition(s)") unless @transitions.all? do |antecedent, input_consequent_mapping|
         @states.includes?(antecedent) && input_consequent_mapping.all? do |input, consequent|
-          (@symbols.includes?(input) || @epsilon && input.empty?) && valid? consequent
+          (@symbols.includes?(input) || @epsilon && input == EPSILON) && valid? consequent
         end
       end
     end
 
     @[AlwaysInline]
     private def assert_valid_symbol(symbol)
-      raise ArgumentError.new("Unknown symbol: #{symbol}") unless (@symbols.includes?(symbol) || @epsilon && symbol.empty?)
+      raise ArgumentError.new("Unknown symbol: #{symbol}") unless (@symbols.includes?(symbol) || @epsilon && symbol == EPSILON)
     end
 
     @[AlwaysInline]
@@ -29,6 +31,8 @@ module Panini::Finite
       raise ArgumentError.new("No transitions provided!") if @transitions.empty?
 
       raise ArgumentError.new("Missing transition(s)") unless @states.all? do |state|
+        next true if state == SINK_STATE
+
         @transitions.has_key?(state) && @symbols.all? do |sym|
           @transitions[state].has_key?(sym) || @epsilon && @transitions[state].has_key?("")
         end
@@ -37,10 +41,9 @@ module Panini::Finite
 
     # transitions may be glued together, here we separate them
     private def preprocess(transitions)
-      # if typeof(transitions) == Hash(State, Hash(Token, State)) ||
-      #    typeof(transitions) == Hash(State, Hash(Token, Set(State)))
-      #   return transitions
-      # end
+      if transitions.is_a? Hash(State, Hash(Token, typeof(transitions.first[1].first[1])))
+        return transitions
+      end
 
       transitions.map do |antecedent, inputs_consequent_mapping|
         input_consequent_mapping = {} of Token => typeof(transitions.first[1].first[1])
@@ -63,7 +66,7 @@ module Panini::Finite
     private def epsilon_transitions_present?
       @transitions.any? do |antecedent, input_consequent_mapping|
         input_consequent_mapping.any? do |input, consequent|
-          next true if input.empty?
+          next true if input == EPSILON
         end
       end
     end
@@ -86,7 +89,7 @@ module Panini::Finite
     end
   end
 
-  class Deterministic < Automaton
+  class Deterministic < Finite
     getter current : State
 
     @states : Set(State)
@@ -102,11 +105,11 @@ module Panini::Finite
     end
 
     # TODO: can use StringPool for Token tokens ?
-    def initialize(@states, @symbols, @transitions, start_state, accepting_states)
+    def initialize(@states, @symbols, transitions, start_state, accepting_states)
       assert_valid_start_state(start_state)
       assert_valid_accepting_states(accepting_states)
 
-      @transitions = preprocess transitions
+      @transitions = preprocess(transitions)
 
       raise ArgumentError.new("DFA can't have epsilon transitions!") if epsilon_transitions_present?
       @epsilon = false
@@ -120,7 +123,7 @@ module Panini::Finite
 
     # delta
     private def delta(state, input_symbol : Token)
-      return state if input_symbol.empty?
+      return state if input_symbol == EPSILON
 
       assert_valid_symbol(input_symbol)
       @transitions[state][input_symbol]
@@ -163,7 +166,7 @@ module Panini::Finite
     end
   end
 
-  class NonDeterministic < Automaton
+  class NonDeterministic < Finite
     getter current : Set(State)
 
     @states : Set(State)
@@ -183,7 +186,7 @@ module Panini::Finite
       assert_valid_start_state(start_state)
       assert_valid_accepting_states(accepting_states)
 
-      @transitions = preprocess transitions
+      @transitions = preprocess(transitions)
       @epsilon = epsilon_transitions_present?
 
       assert_valid_transitions
@@ -221,8 +224,8 @@ module Panini::Finite
     end
 
     # delta
-    private def delta(state, input_symbol = "")
-      return Set{state} if !@epsilon && input_symbol.empty?
+    private def delta(state, input_symbol = EPSILON)
+      return Set{state} if !@epsilon && input_symbol == EPSILON
 
       assert_valid_symbol(input_symbol)
 
@@ -235,7 +238,7 @@ module Panini::Finite
 
     # delta cap
     private def delta(state, input_symbols : Array(Token))
-      return epsilon_closure(state) if input_symbols.empty?
+      return Set{state} if input_symbols.empty?
 
       consequents = delta(state, input_symbols[0])
 
@@ -265,7 +268,7 @@ module Panini::Finite
     def to_dfa
       dfa_transitions = {} of State => Hash(Token, State)
 
-      start_id = Panini.state_set_to_identifier(@start)
+      start_id = Panini::Helper.state_set_to_identifier(@start)
       dfa_start = start_id
       dfa_states = Set{start_id}
       dfa_accepts = (@start & @accepts).size > 0 ? Set{start_id} : Set(State).new
@@ -274,15 +277,16 @@ module Panini::Finite
 
       loop do
         current = queue.shift
-        current_id = Panini.state_set_to_identifier(current)
+        current_id = Panini::Helper.state_set_to_identifier(current)
         symbol_consequent_mapping = {} of Token => State
 
         @symbols.each do |sym|
-          consequent = current.reduce Set(State).new do |consequents_union, antecedent|
-            consequents_union | delta(antecedent, sym)
+          consequent = epsilon_closure(current).reduce Set(State).new do |consequents_union, antecedent|
+            consequents_union | epsilon_closure(delta antecedent, sym)
           end
-          consequent_id = Panini.state_set_to_identifier(consequent)
-          queue << consequent unless dfa_states.includes? consequent_id
+
+          consequent_id = Panini::Helper.state_set_to_identifier(consequent)
+          queue << consequent unless consequent_id == SINK_STATE || dfa_states.includes?(consequent_id)
 
           dfa_states << consequent_id
           dfa_accepts << consequent_id if (consequent & @accepts).size > 0
@@ -294,57 +298,14 @@ module Panini::Finite
         break if queue.empty?
       end
 
+      if dfa_states.includes? SINK_STATE
+        dfa_transitions[SINK_STATE] = Hash(Token, State).new do |h, k|
+          h[k] = SINK_STATE
+        end
+      end
+
       Deterministic.new(dfa_states, @symbols, dfa_transitions, dfa_start, dfa_accepts)
     end
   end
-
-  # class EpsilonNonDeterministic < NonDeterministic
-  #   def initialize(@states, @symbols, @transitions, start_state, accepting_states)
-  #     assert_valid_start_state(start_state)
-  #     assert_valid_accepting_states(accepting_states)
-  #     assert_valid_transitions(epsilon: true)
-  #     assert_no_missing_transitions(epsilon: true)
-
-  #     @current = @start = start_state
-  #     @accepts = accepting_states
-  #   end
-
-  #   # delta
-  #   private def delta(state, input_symbol : Token)
-  #     assert_valid_symbol(input_symbol)
-  #     @transitions[state][input_symbol]
-  #   end
-
-  #   @[AlwaysInline]
-  #   private def epsilon_closure(state)
-  #     @transitions[state][""]
-  #   end
-
-  #   # delta cap
-  #   private def delta(state, input_symbols : Array(Token))
-  #     return epsilon_closure(state) if input_symbols.empty?
-
-  #     consequents = delta(state, input_symbols[0])
-
-  #     consequents.reduce Set(State).new do |states_union, consequent|
-  #       states_union | delta(consequent, input_symbols[1..])
-  #     end
-  #   end
-
-  #   def process(input_symbol : Token)
-  #     @current = @current.reduce Set(State).new do |consequents_union, antecedent|
-  #       consequents_union | epsilon_closure(delta(antecedent, input_symbol))
-  #     end
-  #     self
-  #   end
-
-  #   def process(input_symbols : Array(Token))
-  #     @current = @current.reduce Set(State).new do |consequents_union, antecedent|
-  #       consequents_union | epsilon_closure(delta(antecedent, input_symbols))
-  #     end
-  #     self
-  #   end
-
-  # end
 
 end

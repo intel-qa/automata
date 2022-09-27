@@ -2,7 +2,7 @@ require "./spec_helper"
 
 include Panini
 
-describe Panini::Finite::Deterministic do
+describe Panini::Automaton::Deterministic do
   describe "#initialize" do
 
     context "with invalid start state" do
@@ -16,7 +16,7 @@ describe Panini::Finite::Deterministic do
         }
 
         expect_raises ArgumentError, "Invalid start state" do
-          Finite::Deterministic.new(states, symbols, transitions, "q11", Set{"q1"})
+          Automaton::Deterministic.new(states, symbols, transitions, "q11", Set{"q1"})
         end
       end
     end
@@ -32,7 +32,7 @@ describe Panini::Finite::Deterministic do
         }
 
         expect_raises ArgumentError, "Invalid accepting state(s)" do
-          Finite::Deterministic.new(states, symbols, transitions, "q0", Set{"q11"})
+          Automaton::Deterministic.new(states, symbols, transitions, "q0", Set{"q11"})
         end
       end
     end
@@ -48,7 +48,7 @@ describe Panini::Finite::Deterministic do
         }
 
         expect_raises ArgumentError, "Invalid transition(s)" do
-          Finite::Deterministic.new(states, symbols, transitions, "q0", Set{"q1"})
+          Automaton::Deterministic.new(states, symbols, transitions, "q0", Set{"q1"})
         end
       end
     end
@@ -64,7 +64,7 @@ describe Panini::Finite::Deterministic do
         }
 
         expect_raises ArgumentError, "Invalid transition(s)" do
-          Finite::Deterministic.new(states, symbols, transitions, "q0", Set{"q1"})
+          Automaton::Deterministic.new(states, symbols, transitions, "q0", Set{"q1"})
         end
       end
     end
@@ -80,7 +80,7 @@ describe Panini::Finite::Deterministic do
         }
 
         expect_raises ArgumentError, "Missing transition(s)" do
-          Finite::Deterministic.new(states, symbols, transitions, "q0", Set{"q1"})
+          Automaton::Deterministic.new(states, symbols, transitions, "q0", Set{"q1"})
         end
       end
     end
@@ -93,11 +93,11 @@ describe Panini::Finite::Deterministic do
         symbols = Set{"0", "1"}
         transitions = {
           "q0" => {"0" => "q2", "1" => "q0"},
-          "q1" => {"0" => "q1", "1" => "q1"},
+          "q1" => {"01".split("") => "q1"},
           "q2" => {"0" => "q2", "1" => "q1"},
         }
 
-        dfa = Finite::Deterministic.new(states, symbols, transitions, "q0", Set{"q1"})
+        dfa = Automaton::Deterministic.new(states, symbols, transitions, "q0", Set{"q1"})
         dfa.process("0")
         dfa.current.should eq "q2"
 
@@ -121,7 +121,7 @@ describe Panini::Finite::Deterministic do
           "q2" => {"0" => "q2", "1" => "q1"},
         }
 
-        dfa = Finite::Deterministic.new(states, symbols, transitions, "q0", Set{"q1"})
+        dfa = Automaton::Deterministic.new(states, symbols, transitions, "q0", Set{"q1"})
         dfa.accepts?(["1","0","0","1","0","1","0","1","1","0","1","0",]).should be_true
         dfa.current.should eq "q1"
       end
@@ -140,7 +140,7 @@ describe Panini::Finite::Deterministic do
           "q2" => {"0" => "q2", "1" => "q1"},
         }
 
-        dfa = Finite::Deterministic.new(states, symbols, transitions, "q0", Set{"q1"})
+        dfa = Automaton::Deterministic.new(states, symbols, transitions, "q0", Set{"q1"})
         dfa.accepts?(["0","0","1","0","1","0","1","1","0","1","0",]).should be_true
       end
     end
@@ -155,7 +155,7 @@ describe Panini::Finite::Deterministic do
           "q2" => {"0" => "q2", "1" => "q1"},
         }
 
-        dfa = Finite::Deterministic.new(states, symbols, transitions, "q0", Set{"q1"})
+        dfa = Automaton::Deterministic.new(states, symbols, transitions, "q0", Set{"q1"})
         dfa.accepts?(["1","1","1","1","0","1","0","1","1","0","1","0",]).should be_true
       end
     end
@@ -170,7 +170,7 @@ describe Panini::Finite::Deterministic do
           "q2" => {"0" => "q2", "1" => "q1"},
         }
 
-        dfa = Finite::Deterministic.new(states, symbols, transitions, "q0", Set{"q1"})
+        dfa = Automaton::Deterministic.new(states, symbols, transitions, "q0", Set{"q1"})
         dfa.accepts?(["1","1","1","1","1","1","1","1","0","0","0","0",]).should be_false
       end
     end
@@ -186,7 +186,7 @@ describe Panini::Finite::Deterministic do
         "q2" => {"0" => "q2", "1" => "q1"},
       }
 
-      dfa = Finite::Deterministic.new(states, symbols, transitions, "q0", Set{"q1"})
+      dfa = Automaton::Deterministic.new(states, symbols, transitions, "q0", Set{"q1"})
       nfa = dfa.to_nfa
 
       ["0", "1", "0", "1", "0"].each do |sym|
@@ -198,7 +198,7 @@ describe Panini::Finite::Deterministic do
   end
 end
 
-describe Panini::Finite::NonDeterministic do
+describe Panini::Automaton::NonDeterministic do
   describe "#initialize" do
     context "when epsilon transitions are not present" do
       context "with invalid start state" do
@@ -211,7 +211,7 @@ describe Panini::Finite::NonDeterministic do
           }
 
           expect_raises ArgumentError, "Invalid start state" do
-            Finite::NonDeterministic.new(states, symbols, transitions, Set{"q11"}, Set{"q2"})
+            Automaton::NonDeterministic.new(states, symbols, transitions, Set{"q11"}, Set{"q2"})
           end
         end
       end
@@ -226,7 +226,7 @@ describe Panini::Finite::NonDeterministic do
         }
 
           expect_raises ArgumentError, "Invalid accepting state(s)" do
-            Finite::NonDeterministic.new(states, symbols, transitions, Set{"q0"}, Set{"q11"})
+            Automaton::NonDeterministic.new(states, symbols, transitions, Set{"q0"}, Set{"q11"})
           end
         end
       end
@@ -241,7 +241,7 @@ describe Panini::Finite::NonDeterministic do
           }
 
           expect_raises ArgumentError, "Invalid transition(s)" do
-            Finite::NonDeterministic.new(states, symbols, transitions, Set{"q0"}, Set{"q2"})
+            Automaton::NonDeterministic.new(states, symbols, transitions, Set{"q0"}, Set{"q2"})
           end
         end
       end
@@ -256,7 +256,7 @@ describe Panini::Finite::NonDeterministic do
           }
 
           expect_raises ArgumentError, "Invalid transition(s)" do
-            Finite::NonDeterministic.new(states, symbols, transitions, Set{"q0"}, Set{"q2"})
+            Automaton::NonDeterministic.new(states, symbols, transitions, Set{"q0"}, Set{"q2"})
           end
         end
       end
@@ -277,7 +277,7 @@ describe Panini::Finite::NonDeterministic do
           }
 
           expect_raises ArgumentError, "Invalid start state" do
-            Finite::NonDeterministic.new(states, symbols, transitions, Set{"q11"}, Set{"q2"})
+            Automaton::NonDeterministic.new(states, symbols, transitions, Set{"q11"}, Set{"q2"})
           end
         end
       end
@@ -295,7 +295,7 @@ describe Panini::Finite::NonDeterministic do
           }
 
           expect_raises ArgumentError, "Invalid accepting state(s)" do
-            Finite::NonDeterministic.new(states, symbols, transitions, Set{"q0"}, Set{"q11"})
+            Automaton::NonDeterministic.new(states, symbols, transitions, Set{"q0"}, Set{"q11"})
           end
         end
       end
@@ -313,7 +313,7 @@ describe Panini::Finite::NonDeterministic do
           }
 
           expect_raises ArgumentError, "Invalid transition(s)" do
-            Finite::NonDeterministic.new(states, symbols, transitions, Set{"q0"}, Set{"q5"})
+            Automaton::NonDeterministic.new(states, symbols, transitions, Set{"q0"}, Set{"q5"})
           end
         end
       end
@@ -331,7 +331,7 @@ describe Panini::Finite::NonDeterministic do
           }
 
           expect_raises ArgumentError, "Invalid transition(s)" do
-            Finite::NonDeterministic.new(states, symbols, transitions, Set{"q0"}, Set{"q2"})
+            Automaton::NonDeterministic.new(states, symbols, transitions, Set{"q0"}, Set{"q2"})
           end
         end
       end
@@ -339,8 +339,40 @@ describe Panini::Finite::NonDeterministic do
     end
   end
 
-  describe "#process" do
+  describe "#epsilon_closure" do
+    context "when epsilon transitions are not present" do
+      it "gives a set containing a single state" do
+        states = Set{"q0", "q1", "q2"}
+        symbols = Set{"0", "1"}
+        transitions = {
+          "q0" => {"0" => Set{"q0"}, "1" => Set{"q0", "q1"}},
+          "q1" => {"0" => Set{"q2"}, "1" => Set{"q2"}},
+        }
 
+        nfa = Automaton::NonDeterministic.new(states, symbols, transitions, Set{"q0"}, Set{"q2"})
+        nfa.epsilon_closure("q0").should eq Set{"q0"}
+      end
+    end
+
+    context "when epsilon transitions are present" do
+      it "gives a set containing a single state", focus: false do
+        states = Set{"1", "2", "3", "4", "5", "6", "7"}
+        symbols = Set{"a", "b"}
+        transitions = {
+          "1" => {"" => Set{"2", "4"}},
+          "2" => {"" => Set{"3"}},
+          "3" => {"" => Set{"6"}},
+          "4" => {"a" => Set{"5"}},
+          "5" => {"b" => Set{"6"}, "" => Set{"7"}},
+        }
+
+        nfa = Automaton::NonDeterministic.new(states, symbols, transitions, Set{"1"}, Set{"6"})
+        nfa.epsilon_closure("1").should eq Set{"1", "2", "3", "4", "6"}
+      end
+    end
+  end
+
+  describe "#process" do
     context "when epsilon transitions are not present" do
       context "input symbol" do
         it "moves to correct next state", focus: false do
@@ -351,7 +383,7 @@ describe Panini::Finite::NonDeterministic do
             "q1" => {"0" => Set{"q2"}, "1" => Set{"q2"}},
           }
 
-          nfa = Finite::NonDeterministic.new(states, symbols, transitions, Set{"q0"}, Set{"q2"})
+          nfa = Automaton::NonDeterministic.new(states, symbols, transitions, Set{"q0"}, Set{"q2"})
           nfa.process("0")
           nfa.current.should eq Set{"q0"}
 
@@ -374,7 +406,7 @@ describe Panini::Finite::NonDeterministic do
             "q1" => {"0" => Set{"q2"}, "1" => Set{"q2"}},
           }
 
-          nfa = Finite::NonDeterministic.new(states, symbols, transitions, Set{"q0"}, Set{"q2"})
+          nfa = Automaton::NonDeterministic.new(states, symbols, transitions, Set{"q0"}, Set{"q2"})
           nfa.process(["0","1","0","1","0"])
           nfa.current.should eq Set{"q0", "q2"}
         end
@@ -394,7 +426,7 @@ describe Panini::Finite::NonDeterministic do
             "q4" => {"." => Set{"q3"}},
           }
 
-          nfa = Finite::NonDeterministic.new(states, symbols, transitions, Set{"q0"}, Set{"q5"})
+          nfa = Automaton::NonDeterministic.new(states, symbols, transitions, Set{"q0"}, Set{"q5"})
 
           nfa.process("7")
           nfa.current.should eq Set{"q1", "q4"}
@@ -425,230 +457,173 @@ describe Panini::Finite::NonDeterministic do
             "q4" => {"." => Set{"q3"}},
           }
 
-          nfa = Finite::NonDeterministic.new(states, symbols, transitions, Set{"q0"}, Set{"q5"})
+          nfa = Automaton::NonDeterministic.new(states, symbols, transitions, Set{"q0"}, Set{"q5"})
           nfa.process(["5",".","6"])
           nfa.current.should eq Set{"q3", "q5"}
         end
       end
     end
 
-
   end
 
   describe "#accepts?" do
-    context "valid sequence of input symbols starting with 0" do
-      it "returns true", focus: false do
-        states = Set{"q0", "q1", "q2"}
-        symbols = Set{"0", "1"}
-        transitions = {
-          "q0" => {"0" => Set{"q0"}, "1" => Set{"q0", "q1"}},
-          "q1" => {"0" => Set{"q2"}, "1" => Set{"q2"}},
+    context "when epsilon transitions are not present" do
+      context "valid sequence of input symbols starting with 0" do
+        it "returns true", focus: false do
+          states = Set{"q0", "q1", "q2"}
+          symbols = Set{"0", "1"}
+          transitions = {
+            "q0" => {"0" => Set{"q0"}, "1" => Set{"q0", "q1"}},
+            "q1" => {"0" => Set{"q2"}, "1" => Set{"q2"}},
+          }
 
-        }
+          nfa = Automaton::NonDeterministic.new(states, symbols, transitions, Set{"q0"}, Set{"q2"})
+          nfa.accepts?(["0","1","0","1","0",]).should be_true
+        end
+      end
 
-        nfa = Finite::NonDeterministic.new(states, symbols, transitions, Set{"q0"}, Set{"q2"})
-        nfa.accepts?(["0","1","0","1","0",]).should be_true
+      context "valid sequence of input symbols starting with 1" do
+        it "returns true", focus: false do
+          states = Set{"q0", "q1", "q2"}
+          symbols = Set{"0", "1"}
+          transitions = {
+            "q0" => {"0" => Set{"q0"}, "1" => Set{"q0", "q1"}},
+            "q1" => {"0" => Set{"q2"}, "1" => Set{"q2"}},
+          }
+
+          nfa = Automaton::NonDeterministic.new(states, symbols, transitions, Set{"q0"}, Set{"q2"})
+          nfa.accepts?(["1","1","1","1","0","1","0","1","1","0","1","0",]).should be_true
+        end
+      end
+
+      context "invalid sequence of input symbols" do
+        it "returns false", focus: false do
+          states = Set{"q0", "q1", "q2"}
+          symbols = Set{"0", "1"}
+          transitions = {
+            "q0" => {"0" => Set{"q0"}, "1" => Set{"q0", "q1"}},
+            "q1" => {"0" => Set{"q2"}, "1" => Set{"q2"}},
+          }
+
+          nfa = Automaton::NonDeterministic.new(states, symbols, transitions, Set{"q0"}, Set{"q2"})
+          nfa.accepts?(["1","1","1","1","1","1","1","1","0","0","0","0",]).should be_false
+        end
       end
     end
 
-    context "valid sequence of input symbols starting with 1" do
-      it "returns true", focus: false do
-        states = Set{"q0", "q1", "q2"}
-        symbols = Set{"0", "1"}
-        transitions = {
-          "q0" => {"0" => Set{"q0"}, "1" => Set{"q0", "q1"}},
-          "q1" => {"0" => Set{"q2"}, "1" => Set{"q2"}},
+    context "when epsilon transitions are present", focus: false do
+      context "for valid number with decimal" do
+        it "returns true", focus: false do
+          states = Set{"q0", "q1", "q2", "q3", "q4", "q5"}
+          symbols = "0123456789.+-".split("").to_set
+          transitions = {
+            "q0" => {"+-".split("") => Set{"q1"}, "" => Set{"q1"}},
+            "q1" => {"." => Set{"q2"}, "0123456789".split("") => Set{"q1", "q4"}},
+            "q2" => {"0123456789".split("") => Set{"q3"}},
+            "q3" => {"0123456789".split("") => Set{"q3"}, "" => Set{"q5"}},
+            "q4" => {"." => Set{"q3"}},
+          }
 
-        }
-
-        nfa = Finite::NonDeterministic.new(states, symbols, transitions, Set{"q0"}, Set{"q2"})
-        nfa.accepts?(["1","1","1","1","0","1","0","1","1","0","1","0",]).should be_true
+          nfa = Automaton::NonDeterministic.new(states, symbols, transitions, Set{"q0"}, Set{"q5"})
+          nfa.accepts?("78.3".split("")).should be_true
+        end
       end
-    end
 
-    context "invalid sequence of input symbols" do
-      it "returns false", focus: false do
-        states = Set{"q0", "q1", "q2"}
-        symbols = Set{"0", "1"}
-        transitions = {
-          "q0" => {"0" => Set{"q0"}, "1" => Set{"q0", "q1"}},
-          "q1" => {"0" => Set{"q2"}, "1" => Set{"q2"}},
-        }
+      context "for number with no digits before decimal" do
+        it "returns true", focus: false do
+          states = Set{"q0", "q1", "q2", "q3", "q4", "q5"}
+          symbols = "0123456789.+-".split("").to_set
+          transitions = {
+            "q0" => {"+-".split("") => Set{"q1"}, "" => Set{"q1"}},
+            "q1" => {"." => Set{"q2"}, "0123456789".split("") => Set{"q1", "q4"}},
+            "q2" => {"0123456789".split("") => Set{"q3"}},
+            "q3" => {"0123456789".split("") => Set{"q3"}, "" => Set{"q5"}},
+            "q4" => {"." => Set{"q3"}},
+          }
 
-        nfa = Finite::NonDeterministic.new(states, symbols, transitions, Set{"q0"}, Set{"q2"})
-        nfa.accepts?(["1","1","1","1","1","1","1","1","0","0","0","0",]).should be_false
+          nfa = Automaton::NonDeterministic.new(states, symbols, transitions, Set{"q0"}, Set{"q5"})
+          nfa.accepts?(".783".split("")).should be_true
+        end
+      end
+
+      context "for number with no digits after decimal" do
+        it "returns false", focus: false do
+          states = Set{"q0", "q1", "q2", "q3", "q4", "q5"}
+          symbols = "0123456789.+-".split("").to_set
+          transitions = {
+            "q0" => {"+-".split("") => Set{"q1"}, "" => Set{"q1"}},
+            "q1" => {"." => Set{"q2"}, "0123456789".split("") => Set{"q1", "q4"}},
+            "q2" => {"0123456789".split("") => Set{"q3"}},
+            "q3" => {"0123456789".split("") => Set{"q3"}, "" => Set{"q5"}},
+            "q4" => {"." => Set{"q3"}},
+          }
+
+          nfa = Automaton::NonDeterministic.new(states, symbols, transitions, Set{"q0"}, Set{"q5"})
+          nfa.accepts?("783.".split("")).should be_true
+        end
+      end
+
+      context "for an integer" do
+        it "returns false", focus: false do
+          states = Set{"q0", "q1", "q2", "q3", "q4", "q5"}
+          symbols = "0123456789.+-".split("").to_set
+          transitions = {
+            "q0" => {"+-".split("") => Set{"q1"}, "" => Set{"q1"}},
+            "q1" => {"." => Set{"q2"}, "0123456789".split("") => Set{"q1", "q4"}},
+            "q2" => {"0123456789".split("") => Set{"q3"}},
+            "q3" => {"0123456789".split("") => Set{"q3"}, "" => Set{"q5"}},
+            "q4" => {"." => Set{"q3"}},
+          }
+
+          nfa = Automaton::NonDeterministic.new(states, symbols, transitions, Set{"q0"}, Set{"q5"})
+          nfa.accepts?("783".split("")).should be_false
+        end
       end
     end
   end
 
   describe "#to_dfa" do
-    it "generates an equivalent DFA from the NFA" do
-      states = Set{"q0", "q1", "q2"}
-      symbols = Set{"0", "1"}
-      transitions = {
-        "q0" => {"0" => Set{"q0"}, "1" => Set{"q0", "q1"}},
-        "q1" => {"0" => Set{"q2"}, "1" => Set{"q2"}},
-      }
-
-      nfa = Finite::NonDeterministic.new(states, symbols, transitions, Set{"q0"}, Set{"q2"})
-      dfa = nfa.to_dfa
-
-      ["0", "1", "0", "1", "0"].each do |sym|
-        nfa.process sym
-        dfa.process sym
-        dfa.current.should eq Panini.state_set_to_identifier(nfa.current)
-      end
-    end
-  end
-
-  describe "#epsilon_closure" do
-
-    context "when epsilon transitions are not present" do
-      it "gives a set containing a single state" do
+    context "from an NFA" do
+      it "generates an equivalent DFA" do
         states = Set{"q0", "q1", "q2"}
         symbols = Set{"0", "1"}
         transitions = {
           "q0" => {"0" => Set{"q0"}, "1" => Set{"q0", "q1"}},
           "q1" => {"0" => Set{"q2"}, "1" => Set{"q2"}},
-
         }
 
-        nfa = Finite::NonDeterministic.new(states, symbols, transitions, Set{"q0"}, Set{"q2"})
-        nfa.epsilon_closure("q0").should eq Set{"q0"}
+        nfa = Automaton::NonDeterministic.new(states, symbols, transitions, Set{"q0"}, Set{"q2"})
+        dfa = nfa.to_dfa
+
+        ["0", "1", "0", "1", "0"].each do |sym|
+          nfa.process sym
+          dfa.process sym
+          dfa.current.should eq Panini::Helper.state_set_to_identifier(nfa.current)
+        end
       end
     end
 
-    context "when epsilon transitions are present" do
-      it "gives a set containing a single state", focus: false do
-        states = Set{"1", "2", "3", "4", "5", "6", "7"}
-        symbols = Set{"a", "b"}
+    context "from an e-NFA" do
+      it "generates an equivalent DFA", focus: false do
+        states = Set{"q0", "q1", "q2", "q3", "q4", "q5"}
+        symbols = "0123456789.+-".split("").to_set
         transitions = {
-          "1" => {"" => Set{"2", "4"}},
-          "2" => {"" => Set{"3"}},
-          "3" => {"" => Set{"6"}},
-          "4" => {"a" => Set{"5"}},
-          "5" => {"b" => Set{"6"}, "" => Set{"7"}},
+          "q0" => {"+-".split("") => Set{"q1"}, "" => Set{"q1"}},
+          "q1" => {"." => Set{"q2"}, "0123456789".split("") => Set{"q1", "q4"}},
+          "q2" => {"0123456789".split("") => Set{"q3"}},
+          "q3" => {"0123456789".split("") => Set{"q3"}, "" => Set{"q5"}},
+          "q4" => {"." => Set{"q3"}},
         }
 
-        nfa = Finite::NonDeterministic.new(states, symbols, transitions, Set{"1"}, Set{"6"})
-        nfa.epsilon_closure("1").should eq Set{"1", "2", "3", "4", "6"}
+        nfa = Automaton::NonDeterministic.new(states, symbols, transitions, Set{"q0"}, Set{"q5"})
+        dfa = nfa.to_dfa
+
+        "234.431".split("").each do |sym|
+          nfa.process sym
+          dfa.process sym
+          dfa.current.should eq Panini::Helper.state_set_to_identifier(nfa.current)
+        end
       end
     end
-
   end
 end
-
-
-# describe Panini::Finite::EpsilonNonDeterministic do
-
-#   describe "#process" do
-#     context "input symbol" do
-#       it "moves to correct next state", focus: false do
-#         states = Set{"q0", "q1", "q2", "q3", "q4", "q5"}
-#         symbols = Set{"0", "1"}
-#         transitions = {
-#           "q0" => {"0" => Set{"q0"}, "1" => Set{"q0", "q1"}},
-#           "q1" => {"0" => Set{"q2"}, "1" => Set{"q2"}},
-#
-#         }
-
-#         nfa = Finite::EpsilonNonDeterministic.new(states, symbols, transitions, Set{"q0"}, Set{"q2"})
-#         nfa.process("0")
-#         nfa.current.should eq Set{"q0"}
-
-#         nfa.reset
-#         nfa.process("1")
-#         nfa.current.should eq Set{"q0", "q1"}
-
-#         nfa.reset
-#         nfa.process("0").process("1").process("0")
-#         nfa.current.should eq Set{"q0", "q2"}
-#       end
-#     end
-
-#     context "sequence of input symbols" do
-#       it "moves to correct end state", focus: false do
-#         states = Set{"q0", "q1", "q2"}
-#         symbols = Set{"0", "1"}
-#         transitions = {
-#           "q0" => {"0" => Set{"q0"}, "1" => Set{"q0", "q1"}},
-#           "q1" => {"0" => Set{"q2"}, "1" => Set{"q2"}},
-#
-#         }
-
-#         nfa = Finite::EpsilonNonDeterministic.new(states, symbols, transitions, Set{"q0"}, Set{"q2"})
-#         nfa.process(["0","1","0","1","0"])
-#         nfa.current.should eq Set{"q0", "q2"}
-#       end
-#     end
-
-#   end
-
-#   describe "#accepts?" do
-#     context "valid sequence of input symbols starting with 0" do
-#       it "returns true", focus: false do
-#         states = Set{"q0", "q1", "q2"}
-#         symbols = Set{"0", "1"}
-#         transitions = {
-#           "q0" => {"0" => Set{"q0"}, "1" => Set{"q0", "q1"}},
-#           "q1" => {"0" => Set{"q2"}, "1" => Set{"q2"}},
-#
-#         }
-
-#         nfa = Finite::EpsilonNonDeterministic.new(states, symbols, transitions, Set{"q0"}, Set{"q2"})
-#         nfa.accepts?(["0","1","0","1","0",]).should be_true
-#       end
-#     end
-
-#     context "valid sequence of input symbols starting with 1" do
-#       it "returns true", focus: false do
-#         states = Set{"q0", "q1", "q2"}
-#         symbols = Set{"0", "1"}
-#         transitions = {
-#           "q0" => {"0" => Set{"q0"}, "1" => Set{"q0", "q1"}},
-#           "q1" => {"0" => Set{"q2"}, "1" => Set{"q2"}},
-#
-#         }
-
-#         nfa = Finite::EpsilonNonDeterministic.new(states, symbols, transitions, Set{"q0"}, Set{"q2"})
-#         nfa.accepts?(["1","1","1","1","0","1","0","1","1","0","1","0",]).should be_true
-#       end
-#     end
-
-#     context "invalid sequence of input symbols" do
-#       it "returns false", focus: false do
-#         states = Set{"q0", "q1", "q2"}
-#         symbols = Set{"0", "1"}
-#         transitions = {
-#           "q0" => {"0" => Set{"q0"}, "1" => Set{"q0", "q1"}},
-#           "q1" => {"0" => Set{"q2"}, "1" => Set{"q2"}},
-#
-#         }
-
-#         nfa = Finite::EpsilonNonDeterministic.new(states, symbols, transitions, Set{"q0"}, Set{"q2"})
-#         nfa.accepts?(["1","1","1","1","1","1","1","1","0","0","0","0",]).should be_false
-#       end
-#     end
-#   end
-
-#   describe "#to_dfa" do
-#     it "generates an equivalent DFA from the NFA" do
-#       states = Set{"q0", "q1", "q2"}
-#       symbols = Set{"0", "1"}
-#       transitions = {
-#         "q0" => {"0" => Set{"q0"}, "1" => Set{"q0", "q1"}},
-#         "q1" => {"0" => Set{"q2"}, "1" => Set{"q2"}},
-#
-#       }
-
-#       nfa = Finite::EpsilonNonDeterministic.new(states, symbols, transitions, Set{"q0"}, Set{"q2"})
-#       dfa = nfa.to_dfa
-
-#       ["0", "1", "0", "1", "0"].each do |sym|
-#         nfa.process sym
-#         dfa.process sym
-#         dfa.current.should eq Panini.state_set_to_identifier(nfa.current)
-#       end
-#     end
-#   end
-# end
