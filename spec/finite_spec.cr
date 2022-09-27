@@ -627,3 +627,26 @@ describe Panini::Automaton::NonDeterministic do
     end
   end
 end
+
+
+describe Panini::Automaton do
+  it "converts an e-NFA to DFA", focus: false do
+    states = "pqr".split("").to_set
+    symbols = "ab".split("").to_set
+    transitions = {
+      "p" => {"" => Set{"r"}, "a" => Set{"q"}, "b" => Set{"p", "r"}},
+      "q" => {"a" => Set{"p"}},
+      "r" => {"" => Set{"p", "q"}, "a" => Set{"r"}, "b" => Set{"p"}},
+    }
+
+    e_nfa = Automaton::NonDeterministic.new(states, symbols, transitions, Set{"p"}, Set{"r"})
+    dfa = e_nfa.to_dfa
+
+    "abba".split("").each do |sym|
+      e_nfa.process(sym)
+      dfa.process(sym)
+
+      dfa.current.should eq Panini::Helper.state_set_to_identifier(e_nfa.current)
+    end
+  end
+end
