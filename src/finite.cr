@@ -195,7 +195,12 @@ module Panini::Automaton
       loop do
         current = queue.shift
 
-        next_states = delta(current)
+        next_states = if @transitions[current]?.nil? || @transitions[current][EPSILON]?.nil?
+          Set(State).new
+        else
+          @transitions[current][EPSILON]
+        end
+
         queue.concat(next_states - closure)
         closure.concat(next_states)
 
@@ -203,6 +208,27 @@ module Panini::Automaton
       end
 
       closure
+    end
+
+    # delta
+    private def delta(state, input_symbol = EPSILON)
+      return epsilon_closure(state) if input_symbol == EPSILON
+
+      assert_valid_symbol(input_symbol)
+
+      epsilon_closure(state).reduce Set(State).new do |consequents_union, antecedent|
+        next_states = if @transitions[antecedent]?.nil? || @transitions[antecedent][input_symbol]?.nil?
+          Set(State).new
+        else
+          @transitions[antecedent][input_symbol]
+        end
+        consequents_union | epsilon_closure(next_states)
+      end
+    end
+
+    def process(input_symbol : Token)
+      @current = delta(@current, input_symbol)
+      self
     end
 
     def epsilon_closure(state_set : Set(State))
@@ -213,41 +239,21 @@ module Panini::Automaton
       end
     end
 
-    # delta
-    private def delta(state, input_symbol = EPSILON)
-      return Set{state} if !@epsilon && input_symbol == EPSILON
-
-      assert_valid_symbol(input_symbol)
-
-      if @transitions[state]?.nil? || @transitions[state][input_symbol]?.nil?
-        Set(State).new
-      else
-        @transitions[state][input_symbol]
-      end
-    end
-
     # delta cap
     private def delta(state, input_symbols : Array(Token))
-      return Set{state} if input_symbols.empty?
+      return epsilon_closure(state) if input_symbols.empty?
 
-      consequents = delta(state, input_symbols[0])
+      epsilon_closure(@current).reduce Set(State).new do |consequents_union, antecedent|
+        next_states = delta(state, input_symbols[0]).reduce Set(State).new do |states_union, consequent|
+          states_union | delta(consequent, input_symbols[1..])
+        end
 
-      consequents.reduce Set(State).new do |states_union, consequent|
-        states_union | delta(consequent, input_symbols[1..])
+        consequents_union | epsilon_closure(next_states)
       end
-    end
-
-    def process(input_symbol : Token)
-      @current = epsilon_closure(@current).reduce Set(State).new do |consequents_union, antecedent|
-        consequents_union | epsilon_closure(delta antecedent, input_symbol)
-      end
-      self
     end
 
     def process(input_symbols : Array(Token))
-      @current = epsilon_closure(@current).reduce Set(State).new do |consequents_union, antecedent|
-        consequents_union | epsilon_closure(delta antecedent, input_symbols)
-      end
+      @current = delta(@current, input_symbols)
       self
     end
 

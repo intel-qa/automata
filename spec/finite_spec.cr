@@ -374,7 +374,7 @@ describe Panini::Automaton::NonDeterministic do
 
   describe "#process" do
     context "when epsilon transitions are not present" do
-      context "input symbol" do
+      context "with input symbol", focus: false do
         it "moves to correct next state", focus: false do
           states = Set{"q0", "q1", "q2"}
           symbols = Set{"0", "1"}
