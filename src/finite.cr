@@ -40,22 +40,12 @@ module Panini::Automaton
     end
 
     # transitions may be glued together, here we separate them
-    private def preprocess(transitions)
-      if transitions.is_a? Hash(State, Hash(Token, typeof(transitions.first[1].first[1])))
-        return transitions
-      end
+    private def preprocess(transitions, consequent_type : T.class = typeof(transitions.first[1].first[1])) forall T
+      return transitions if transitions.is_a? Hash(State, Hash(Token, T))
 
       transitions.map do |antecedent, inputs_consequent_mapping|
-        input_consequent_mapping = {} of Token => typeof(transitions.first[1].first[1])
-
-        inputs_consequent_mapping.each do |inputs, consequent|
-          if inputs.is_a? Array
-            inputs.each do |sym|
-              input_consequent_mapping[sym] = consequent
-            end
-          else
-            input_consequent_mapping[inputs] = consequent
-          end
+        input_consequent_mapping = inputs_consequent_mapping.reduce({} of Token => T) do |acc, (inputs, consequent)|
+          acc.merge!(inputs.is_a?(Array) ? inputs.map {|sym| {sym, consequent} }.to_h : {inputs => consequent})
         end
 
         {antecedent, input_consequent_mapping}
