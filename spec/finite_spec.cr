@@ -598,7 +598,12 @@ describe Panini::Automaton::NonDeterministic do
         ["0", "1", "0", "1", "0"].each do |sym|
           nfa.process sym
           dfa.process sym
-          dfa.current.should eq Panini::Helper.state_set_to_identifier(nfa.current)
+          dfa.current.should eq Panini::Automaton::Helper.state_set_to_identifier(nfa.current)
+        end
+
+        ["000010", "00000001000", "111111111"].each do |i|
+          input = i.split("")
+          dfa.accepts?(input).should eq nfa.accepts?(input)
         end
       end
     end
@@ -621,7 +626,12 @@ describe Panini::Automaton::NonDeterministic do
         "234.431".split("").each do |sym|
           nfa.process sym
           dfa.process sym
-          dfa.current.should eq Panini::Helper.state_set_to_identifier(nfa.current)
+          dfa.current.should eq Panini::Automaton::Helper.state_set_to_identifier(nfa.current)
+        end
+
+        ["786", "786.", "7.86", ".786"].each do |i|
+          input = i.split("")
+          dfa.accepts?(input).should eq nfa.accepts?(input)
         end
       end
     end
@@ -630,7 +640,62 @@ end
 
 
 describe Panini::Automaton do
-  it "converts an e-NFA to DFA", focus: false do
+  it "converts a NFA to DFA 1" do
+    states = "pqr".split("").to_set
+    symbols = "01".split("").to_set
+    transitions = {
+      "p" => {"0" => Set{"p", "q"}, "1" => Set{"p"}},
+      "q" => {"1" => Set{"r"}},
+      "r" => {"0" => Set{"p", "r"},"1" => Set{"q"}},
+    }
+
+    nfa = Automaton::NonDeterministic.new(states, symbols, transitions, Set{"p"}, Set{"r"})
+    dfa = nfa.to_dfa
+
+    ["00110", "01011000", "1100111", "110110"].each do |i|
+      input = i.split("")
+      nfa.accepts?(input).should eq dfa.accepts?(input)
+    end
+  end
+
+  it "converts a NFA to DFA 2" do
+    states = "pqrs".split("").to_set
+    symbols = "01".split("").to_set
+    transitions = {
+      "p" => {"0" => Set{"p", "r"}, "1" => Set{"q"}},
+      "q" => {"0" => Set{"r", "s"}, "1" => Set{"p"}},
+      "r" => {"0" => Set{"p", "s"}, "1" => Set{"r"}},
+      "s" => {"0" => Set{"q", "r"}},
+    }
+
+    nfa = Automaton::NonDeterministic.new(states, symbols, transitions, Set{"p"}, Set{"r", "s"})
+    dfa = nfa.to_dfa
+
+    ["00110", "01011000", "1100111", "110110"].each do |i|
+      input = i.split("")
+      nfa.accepts?(input).should eq dfa.accepts?(input)
+    end
+  end
+
+  it "converts a NFA to DFA 3" do
+    states = "pqrst".split("").to_set
+    symbols = "01".split("").to_set
+    transitions = {
+      "p" => {"0" => Set{"p", "q"}, "1" => Set{"p"}},
+      "q" => {"0" => Set{"r", "s"}, "1" => Set{"t"}},
+      "r" => {"0" => Set{"p", "r"}, "1" => Set{"t"}},
+    }
+
+    nfa = Automaton::NonDeterministic.new(states, symbols, transitions, Set{"p"}, Set{"t", "s"})
+    dfa = nfa.to_dfa
+
+    ["00110", "01011000", "1100111", "110110"].each do |i|
+      input = i.split("")
+      nfa.accepts?(input).should eq dfa.accepts?(input)
+    end
+  end
+
+  it "converts an e-NFA to DFA 1", focus: false do
     states = "pqr".split("").to_set
     symbols = "ab".split("").to_set
     transitions = {
@@ -642,11 +707,30 @@ describe Panini::Automaton do
     e_nfa = Automaton::NonDeterministic.new(states, symbols, transitions, Set{"p"}, Set{"r"})
     dfa = e_nfa.to_dfa
 
-    "abba".split("").each do |sym|
+    "baba".split("").each do |sym|
       e_nfa.process(sym)
       dfa.process(sym)
 
-      dfa.current.should eq Panini::Helper.state_set_to_identifier(e_nfa.current)
+      dfa.current.should eq Panini::Automaton::Helper.state_set_to_identifier(e_nfa.current)
+    end
+  end
+
+  it "converts an e-NFA to DFA 2", focus: false do
+    states = "pqr".split("").to_set
+    symbols = "abc".split("").to_set
+    transitions = {
+      "p" => {"" => Set{"q", "r"}, "b" => Set{"q"}, "c" => Set{"r"}},
+      "q" => {"a" => Set{"p"}, "c" => Set{"p", "q"}, "b" => Set{"r"}},
+    }
+
+    e_nfa = Automaton::NonDeterministic.new(states, symbols, transitions, Set{"p"}, Set{"r"})
+    dfa = e_nfa.to_dfa
+
+    "abbaca".split("").each do |sym|
+      e_nfa.process(sym)
+      dfa.process(sym)
+
+      dfa.current.should eq Panini::Automaton::Helper.state_set_to_identifier(e_nfa.current)
     end
   end
 end

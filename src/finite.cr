@@ -1,29 +1,60 @@
+require "string_pool"
+
 module Panini::Automaton
+  private SINK_STATE = "sink_state"
+  private EPSILON = ""
+
+  module Helper
+    def self.state_set_to_identifier(states)
+      states.empty? ? SINK_STATE : states.to_a.sort.join("")
+    end
+  end
+
   abstract class Finite
-    SINK_STATE = "sink_state"
+    @pool = StringPool.new
 
     @[AlwaysInline]
-    private def assert_valid_start_state(start_state)
-      raise ArgumentError.new("Invalid start state") unless valid? start_state
+    private def pool(string : String)
+      @pool.get string
+    end
+
+    @[AlwaysInline]
+    private def pool(strings : Set(String))
+      strings.map{|s| @pool.get s }.to_set
+    end
+
+    @[AlwaysInline]
+    private def known?(symbol)
+      @symbols.includes?(symbol) || @epsilon_transitions_allowed && epsilon? symbol
+    end
+
+    @[AlwaysInline]
+    private def epsilon?(input)
+      input.empty?
+    end
+
+    @[AlwaysInline]
+    private def assert_valid_start_state
+      raise ArgumentError.new("Invalid start state") unless known? state: @start
     end
 
     @[AlwaysInline]
     private def assert_valid_transitions
-      raise ArgumentError.new("Invalid transition(s)") unless @transitions.all? do |antecedent, input_consequent_mapping|
-        @states.includes?(antecedent) && input_consequent_mapping.all? do |input, consequent|
-          (@symbols.includes?(input) || @epsilon && input == EPSILON) && valid? consequent
+      raise ArgumentError.new("Invalid transition(s)") unless @transitions.all? do |state, transitions_for_state|
+        (@states.includes? state) && transitions_for_state.all? do |input, next_state|
+          (known? symbol: input) && (known? state: next_state)
         end
       end
     end
 
     @[AlwaysInline]
-    private def assert_valid_symbol(symbol)
-      raise ArgumentError.new("Unknown symbol: #{symbol}") unless (@symbols.includes?(symbol) || @epsilon && symbol == EPSILON)
+    private def assert_valid(symbol)
+      raise ArgumentError.new("Unknown symbol: #{symbol}") unless known? symbol: symbol
     end
 
     @[AlwaysInline]
-    private def assert_valid_accepting_states(accepting_states)
-      raise ArgumentError.new("Invalid accepting state(s)") unless @states.superset_of? accepting_states
+    private def assert_valid_accepting_states
+      raise ArgumentError.new("Invalid accepting state(s)") unless @states.superset_of? @acceptors
     end
 
     @[AlwaysInline]
@@ -34,48 +65,58 @@ module Panini::Automaton
         next true if state == SINK_STATE
 
         @transitions.has_key?(state) && @symbols.all? do |sym|
-          @transitions[state].has_key?(sym) || @epsilon && @transitions[state].has_key?("")
+          @transitions[state].has_key?(sym) || @epsilon_transitions_allowed && @transitions[state].has_key?("")
         end
       end
     end
 
-    # transitions may be glued together, here we separate them
-    private def preprocess(transitions, consequent_type : T.class = typeof(transitions.first[1].first[1])) forall T
-      return transitions if transitions.is_a? Hash(State, Hash(Token, T))
+    # transitions may be glued together in a compact notation, here we separate them
+    private def preprocess(transitions, next_state_type : T.class = typeof(transitions.first[1].first[1])) forall T
+      Hash(State, Hash(Token, T)).new{ Hash(Token, T).new{T.new} }.merge! transitions.map {|state, inputs_next_state_mapping|
+        transitions_for_state = inputs_next_state_mapping.reduce Hash(Token, T).new{T.new} do |acc, (inputs, next_state)|
+          next_state = pool next_state
 
-      transitions.map do |antecedent, inputs_consequent_mapping|
-        input_consequent_mapping = inputs_consequent_mapping.reduce({} of Token => T) do |acc, (inputs, consequent)|
-          acc.merge!(inputs.is_a?(Array) ? inputs.map {|sym| {sym, consequent} }.to_h : {inputs => consequent})
+          mapping = inputs.is_a?(Array) ?
+            inputs.map {|sym| {(pool sym), next_state} }.to_h :
+            {(pool inputs) => next_state}
+
+          acc.merge! mapping
         end
 
-        {antecedent, input_consequent_mapping}
-      end.to_h
+        {pool(state), transitions_for_state}
+      }.to_h
     end
 
     @[AlwaysInline]
     private def epsilon_transitions_present?
-      @transitions.any? do |antecedent, input_consequent_mapping|
-        input_consequent_mapping.any? do |input, consequent|
-          next true if input == EPSILON
+      @transitions.any? do |state, transitions_for_state|
+        transitions_for_state.any? do |input, next_state|
+          next true if epsilon? input
         end
       end
     end
 
     private abstract def delta(state, input_symbol : Token)
     private abstract def delta(state, input_symbols : Array(Token))
-    abstract def process(input_symbol : Token)
-    abstract def process(input_symbols : Array(Token))
+    private abstract def current_accepts?
 
-    def accepts?(input_symbols)
-      process(input_symbols)
-      current_accepts?
+    def process(input)
+      @current = delta(@current, input)
+      self
     end
 
-    abstract def current_accepts?
+    def accepts?(input_symbols)
+      process input_symbols
+      current_accepts?
+    end
 
     def reset
       @current = @start
       self
+    end
+
+    def to_s(io)
+      io << "<" << @states << " | " << @symbols << " | " << @transitions << " | " << @start << " | " << @acceptors << ">"
     end
   end
 
@@ -86,73 +127,59 @@ module Panini::Automaton
     @symbols : Set(Token)
     @transitions : Hash(State, Hash(Token, State))
     @start : State
-    @accepts : Set(State)
-    @epsilon : Bool
+    @acceptors : Set(State)
+    @epsilon_transitions_allowed = false
 
     @[AlwaysInline]
-    private def valid?(state : State)
+    private def known?(state)
       @states.includes? state
     end
 
-    # TODO: can use StringPool for Token tokens ?
-    def initialize(@states, @symbols, transitions, start_state, accepting_states)
-      assert_valid_start_state(start_state)
-      assert_valid_accepting_states(accepting_states)
+    def initialize(states, symbols, transitions, start_state, accepting_states)
+      @states = pool states
+      @start = pool start_state
+      assert_valid_start_state
 
-      @transitions = preprocess(transitions)
+      @acceptors = pool accepting_states
+      assert_valid_accepting_states
 
+      @symbols = pool symbols
+      @transitions = preprocess transitions
       raise ArgumentError.new("DFA can't have epsilon transitions!") if epsilon_transitions_present?
-      @epsilon = false
 
       assert_valid_transitions
       assert_no_missing_transitions
 
-      @current = @start = start_state
-      @accepts = accepting_states
+      @current = @start
     end
 
     # delta
     private def delta(state, input_symbol : Token)
-      return state if input_symbol == EPSILON
+      assert_valid(symbol: input_symbol)
 
-      assert_valid_symbol(input_symbol)
+      return SINK_STATE if state == SINK_STATE
       @transitions[state][input_symbol]
     end
 
     # delta cap
-    # TODO: check if crystal supports tail call optimization
-    # move to iteration from recursion if not
     private def delta(state, input_symbols : Array(Token))
-      return state if input_symbols.empty?
+      return state if epsilon? input_symbols
 
-      consequent = delta(state, input_symbols[0])
-      delta(consequent, input_symbols[1..])
-    end
-
-    def process(input_symbol : Token)
-      @current = delta(@current, input_symbol)
-      self
-    end
-
-    def process(input_symbols : Array(Token))
-      @current = delta(@current, input_symbols)
-      self
+      delta(delta(state, input_symbols[0..-2]), input_symbols[-1])
     end
 
     private def current_accepts?
-      @accepts.includes? @current
+      @acceptors.includes? @current
     end
 
     def to_nfa
-      nfa_transitions = @transitions.reduce({} of State => Hash(Token, Set(State))) do |nfa_transitions, (antecedent, input_consequent_mapping)|
-        nfa_transitions[antecedent] = input_consequent_mapping.reduce({} of Token => Set(State)) do |nfa_transitions_per_state, (token, consequent)|
-          nfa_transitions_per_state[token] = Set{consequent}
-          nfa_transitions_per_state
-        end
-        nfa_transitions
+      nfa_transitions = @transitions.reduce({} of State => Hash(Token, Set(State))) do |acc, (state, transitions_for_state)|
+        acc.merge! ({
+          state => transitions_for_state.reduce({} of Token => Set(State)) {|acc, (token, next_state)| acc.merge!({token => Set{next_state}}) }
+        })
       end
 
-      NonDeterministic.new(@states, @symbols, nfa_transitions, Set{@start}, @accepts)
+      NonDeterministic.new(@states, @symbols, nfa_transitions, Set{@start}, @acceptors)
     end
   end
 
@@ -163,44 +190,39 @@ module Panini::Automaton
     @symbols : Set(Token)
     @transitions : Hash(State, Hash(Token, Set(State)))
     @start : Set(State)
-    @accepts : Set(State)
-    @epsilon : Bool
+    @acceptors : Set(State)
+    @epsilon_transitions_allowed : Bool
 
     @[AlwaysInline]
-    private def valid?(state_set : Set(State))
-      @states.superset_of? state_set
+    private def known?(state)
+      @states.superset_of? state
     end
 
-    # TODO: can use StringPool for Token tokens ?
-    def initialize(@states, @symbols, transitions, start_state, accepting_states)
-      assert_valid_start_state(start_state)
-      assert_valid_accepting_states(accepting_states)
+    def initialize(states, symbols, transitions, start_state, accepting_states)
+      @states = pool states
+      @start = pool start_state
+      assert_valid_start_state
 
-      @transitions = preprocess(transitions)
-      @epsilon = epsilon_transitions_present?
+      @acceptors = pool accepting_states
+      assert_valid_accepting_states
 
+      @symbols = pool symbols
+      @transitions = preprocess transitions
+      @epsilon_transitions_allowed = epsilon_transitions_present?
       assert_valid_transitions
-      # assert_no_missing_transitions
 
-
-      @current = @start = start_state
-      @accepts = accepting_states
+      @current = @start
     end
 
     def epsilon_closure(state : State)
       closure = Set{state}
-      return closure unless @epsilon
+      return closure unless @epsilon_transitions_allowed
 
       queue = [state]
       loop do
         current = queue.shift
 
-        next_states = if @transitions[current]?.nil? || @transitions[current][EPSILON]?.nil?
-          Set(State).new
-        else
-          @transitions[current][EPSILON]
-        end
-
+        next_states = @transitions[current][EPSILON]
         queue.concat(next_states - closure)
         closure.concat(next_states)
 
@@ -210,94 +232,73 @@ module Panini::Automaton
       closure
     end
 
-    # delta
-    private def delta(state, input_symbol = EPSILON)
-      return epsilon_closure(state) if input_symbol == EPSILON
-
-      assert_valid_symbol(input_symbol)
-
-      epsilon_closure(state).reduce Set(State).new do |consequents_union, antecedent|
-        next_states = if @transitions[antecedent]?.nil? || @transitions[antecedent][input_symbol]?.nil?
-          Set(State).new
-        else
-          @transitions[antecedent][input_symbol]
-        end
-        consequents_union | epsilon_closure(next_states)
-      end
-    end
-
-    def process(input_symbol : Token)
-      @current = delta(@current, input_symbol)
-      self
-    end
-
     def epsilon_closure(state_set : Set(State))
-      return state_set unless @epsilon
+      return state_set unless @epsilon_transitions_allowed
 
       state_set.reduce Set(State).new do |closure_union, state|
         closure_union | epsilon_closure(state)
       end
     end
 
-    # delta cap
-    private def delta(state, input_symbols : Array(Token))
-      return epsilon_closure(state) if input_symbols.empty?
+    # delta
+    private def delta(state, input_symbol = EPSILON)
+      assert_valid(symbol: input_symbol)
 
-      epsilon_closure(@current).reduce Set(State).new do |consequents_union, antecedent|
-        next_states = delta(state, input_symbols[0]).reduce Set(State).new do |states_union, consequent|
-          states_union | delta(consequent, input_symbols[1..])
-        end
-
-        consequents_union | epsilon_closure(next_states)
+      epsilon_closure(state).reduce Set(State).new do |next_states_union, state|
+        next_states = @transitions[state][input_symbol]
+        next_states_union | epsilon_closure(next_states)
       end
     end
 
-    def process(input_symbols : Array(Token))
-      @current = delta(@current, input_symbols)
-      self
+    # delta cap
+    private def delta(state, input_symbols : Array(Token))
+      return epsilon_closure(state) if epsilon? input_symbols
+
+      epsilon_closure(@current).reduce Set(State).new do |next_states_union, state|
+        next_states = delta(state, input_symbols[0..-2]).reduce Set(State).new do |states_union, next_state|
+          states_union | delta(next_state, input_symbols[-1])
+        end
+
+        next_states_union | epsilon_closure(next_states)
+      end
     end
 
     private def current_accepts?
-      (@accepts & @current).size > 0
+      (@acceptors & @current).size > 0
     end
 
     def to_dfa
       dfa_transitions = {} of State => Hash(Token, State)
 
-      start_id = Panini::Helper.state_set_to_identifier(@start)
+      start_closure = epsilon_closure(@start)
+      start_id = Helper.state_set_to_identifier(start_closure)
       dfa_start = start_id
       dfa_states = Set{start_id}
-      dfa_accepts = (@start & @accepts).size > 0 ? Set{start_id} : Set(State).new
+      dfa_accepts = (start_closure & @acceptors).size > 0 ? Set{start_id} : Set(State).new
 
-      queue = [@start]
+      queue = [start_closure]
 
       loop do
         current = queue.shift
-        current_id = Panini::Helper.state_set_to_identifier(current)
-        symbol_consequent_mapping = {} of Token => State
+        current_id = Helper.state_set_to_identifier(current)
+        transitions_for_current = {} of Token => State
 
         @symbols.each do |sym|
-          consequent = epsilon_closure(current).reduce Set(State).new do |consequents_union, antecedent|
-            consequents_union | epsilon_closure(delta antecedent, sym)
+          next_state = current.reduce Set(State).new do |next_states_union, state|
+            next_states_union | epsilon_closure(delta state, sym)
           end
 
-          consequent_id = Panini::Helper.state_set_to_identifier(consequent)
-          queue << consequent unless consequent_id == SINK_STATE || dfa_states.includes?(consequent_id)
+          next_state_id = Helper.state_set_to_identifier(next_state)
+          queue << next_state unless next_state_id == SINK_STATE || dfa_states.includes? next_state_id
 
-          dfa_states << consequent_id
-          dfa_accepts << consequent_id if (consequent & @accepts).size > 0
+          dfa_states << next_state_id
+          dfa_accepts << next_state_id if (next_state & @acceptors).size > 0
 
-          symbol_consequent_mapping[sym] = consequent_id
+          transitions_for_current[sym] = next_state_id
         end
 
-        dfa_transitions[current_id] = symbol_consequent_mapping
+        dfa_transitions[current_id] = transitions_for_current
         break if queue.empty?
-      end
-
-      if dfa_states.includes? SINK_STATE
-        dfa_transitions[SINK_STATE] = Hash(Token, State).new do |h, k|
-          h[k] = SINK_STATE
-        end
       end
 
       Deterministic.new(dfa_states, @symbols, dfa_transitions, dfa_start, dfa_accepts)
