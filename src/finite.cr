@@ -2,7 +2,6 @@ require "string_pool"
 
 module Panini::Automaton
   private SINK_STATE = "sink_state"
-  private EPSILON = ""
 
   module Helper
     def self.state_set_to_identifier(states)
@@ -24,13 +23,17 @@ module Panini::Automaton
     end
 
     @[AlwaysInline]
-    private def known?(symbol)
+    private def known?(symbol : Char)
       @symbols.includes?(symbol) || @epsilon_transitions_allowed && epsilon? symbol
     end
 
     @[AlwaysInline]
-    private def epsilon?(input)
+    private def epsilon?(input : String)
       input.empty?
+    end
+
+    private def epsilon?(input : Char)
+      input == '\0'
     end
 
     @[AlwaysInline]
@@ -72,13 +75,13 @@ module Panini::Automaton
 
     # transitions may be glued together in a compact notation, here we separate them
     private def preprocess(transitions, next_state_type : T.class = typeof(transitions.first[1].first[1])) forall T
-      Hash(State, Hash(Token, T)).new{ Hash(Token, T).new{T.new} }.merge! transitions.map {|state, inputs_next_state_mapping|
-        transitions_for_state = inputs_next_state_mapping.reduce Hash(Token, T).new{T.new} do |acc, (inputs, next_state)|
+      Hash(State, Hash(Char, T)).new{ Hash(Char, T).new{T.new} }.merge! transitions.map {|state, inputs_next_state_mapping|
+        transitions_for_state = inputs_next_state_mapping.reduce Hash(Char, T).new{T.new} do |acc, (inputs, next_state)|
           next_state = pool next_state
 
           mapping = inputs.is_a?(Array) ?
-            inputs.map {|sym| {(pool sym), next_state} }.to_h :
-            {(pool inputs) => next_state}
+            inputs.map {|sym| {sym, next_state} }.to_h :
+            {inputs => next_state}
 
           acc.merge! mapping
         end
@@ -96,8 +99,8 @@ module Panini::Automaton
       end
     end
 
-    private abstract def delta(state, input_symbol : Token)
-    private abstract def delta(state, input_symbols : Array(Token))
+    private abstract def delta(state, input_symbol : Char)
+    private abstract def delta(state, input_symbols : String)
     private abstract def current_accepts?
 
     def process(input)
@@ -124,8 +127,8 @@ module Panini::Automaton
     getter current : State
 
     @states : Set(State)
-    @symbols : Set(Token)
-    @transitions : Hash(State, Hash(Token, State))
+    @symbols : Set(Char)
+    @transitions : Hash(State, Hash(Char, State))
     @start : State
     @acceptors : Set(State)
     @epsilon_transitions_allowed = false
@@ -135,7 +138,7 @@ module Panini::Automaton
       @states.includes? state
     end
 
-    def initialize(states, symbols, transitions, start_state, accepting_states)
+    def initialize(states, @symbols, transitions, start_state, accepting_states)
       @states = pool states
       @start = pool start_state
       assert_valid_start_state
@@ -143,7 +146,6 @@ module Panini::Automaton
       @acceptors = pool accepting_states
       assert_valid_accepting_states
 
-      @symbols = pool symbols
       @transitions = preprocess transitions
       raise ArgumentError.new("DFA can't have epsilon transitions!") if epsilon_transitions_present?
 
@@ -154,7 +156,7 @@ module Panini::Automaton
     end
 
     # delta
-    private def delta(state, input_symbol : Token)
+    private def delta(state, input_symbol : Char)
       assert_valid(symbol: input_symbol)
 
       return SINK_STATE if state == SINK_STATE
@@ -162,7 +164,7 @@ module Panini::Automaton
     end
 
     # delta cap
-    private def delta(state, input_symbols : Array(Token))
+    private def delta(state, input_symbols : String)
       return state if epsilon? input_symbols
 
       delta(delta(state, input_symbols[0..-2]), input_symbols[-1])
@@ -173,9 +175,9 @@ module Panini::Automaton
     end
 
     def to_nfa
-      nfa_transitions = @transitions.reduce({} of State => Hash(Token, Set(State))) do |acc, (state, transitions_for_state)|
+      nfa_transitions = @transitions.reduce({} of State => Hash(Char, Set(State))) do |acc, (state, transitions_for_state)|
         acc.merge! ({
-          state => transitions_for_state.reduce({} of Token => Set(State)) {|acc, (token, next_state)| acc.merge!({token => Set{next_state}}) }
+          state => transitions_for_state.reduce({} of Char => Set(State)) {|acc, (token, next_state)| acc.merge!({token => Set{next_state}}) }
         })
       end
 
@@ -187,8 +189,8 @@ module Panini::Automaton
     getter current : Set(State)
 
     @states : Set(State)
-    @symbols : Set(Token)
-    @transitions : Hash(State, Hash(Token, Set(State)))
+    @symbols : Set(Char)
+    @transitions : Hash(State, Hash(Char, Set(State)))
     @start : Set(State)
     @acceptors : Set(State)
     @epsilon_transitions_allowed : Bool
@@ -198,7 +200,7 @@ module Panini::Automaton
       @states.superset_of? state
     end
 
-    def initialize(states, symbols, transitions, start_state, accepting_states)
+    def initialize(states, @symbols, transitions, start_state, accepting_states)
       @states = pool states
       @start = pool start_state
       assert_valid_start_state
@@ -206,7 +208,6 @@ module Panini::Automaton
       @acceptors = pool accepting_states
       assert_valid_accepting_states
 
-      @symbols = pool symbols
       @transitions = preprocess transitions
       @epsilon_transitions_allowed = epsilon_transitions_present?
       assert_valid_transitions
@@ -251,7 +252,7 @@ module Panini::Automaton
     end
 
     # delta cap
-    private def delta(state, input_symbols : Array(Token))
+    private def delta(state, input_symbols : String)
       return epsilon_closure(state) if epsilon? input_symbols
 
       epsilon_closure(@current).reduce Set(State).new do |next_states_union, state|
@@ -268,7 +269,7 @@ module Panini::Automaton
     end
 
     def to_dfa
-      dfa_transitions = {} of State => Hash(Token, State)
+      dfa_transitions = {} of State => Hash(Char, State)
 
       start_closure = epsilon_closure(@start)
       start_id = Helper.state_set_to_identifier(start_closure)
@@ -281,7 +282,7 @@ module Panini::Automaton
       loop do
         current = queue.shift
         current_id = Helper.state_set_to_identifier(current)
-        transitions_for_current = {} of Token => State
+        transitions_for_current = {} of Char => State
 
         @symbols.each do |sym|
           next_state = current.reduce Set(State).new do |next_states_union, state|
