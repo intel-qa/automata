@@ -122,7 +122,7 @@ describe Panini::Language do
 
       context "with a block" do
         it "initializes a language of size infinity", focus: false do
-          lang_1x = Lang.new({'0', '1'}, Lang::Rule.new{|s| s[-2] == '1'}, 2)
+          lang_1x = Lang.new({'0', '1'}, {Lang::Rule.new{|s| s[-2] == '1'}}, 2)
 
           (lang_1x.includes? "10").should be_true
           (lang_1x.includes? "101").should be_false
@@ -140,7 +140,7 @@ describe Panini::Language do
   # describe "#|" do
   #   context "for 2 membered languages" do
   #     it "finds the union" do
-  #       lang_union = Lang{"01", "0101", "010101", "01010101", "0101010101"} | Lang{"10", "1010", "101010", "10101010", "1010101010"}
+  #       lang_union = Lang.from("01", "0101", "010101", "01010101", "0101010101") | Lang.from("10", "1010", "101010", "10101010", "1010101010")
 
   #       {"10", "1010", "101010", "10101010", "1010101010", "01", "0101", "010101", "01010101", "0101010101"}.each do |string|
   #         (lang_union.includes? string).should be_true

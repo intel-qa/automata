@@ -42,6 +42,10 @@ module Panini
   struct Language
     alias Rule = String -> Bool
 
+    macro rule(condition)
+      Rule.new {|string| {{condition}} }
+    end
+
     INFINITY = Int32::MAX
     UNDEFINED = Int32::MIN
 
@@ -52,6 +56,7 @@ module Panini
     getter min_string_size : Int32
     getter max_string_size : Int32
     @alphabet : Alphabet
+    @rules : Tuple(Rule)
 
     def self.from(*strings : String)
       symbols = strings.reduce(Set(Char).new) do |acc, string|
@@ -62,7 +67,7 @@ module Panini
     end
 
     def self.new
-      new(Alphabet::NIL, Rule.new{|s| false}, UNDEFINED, UNDEFINED)
+      new(Alphabet::NIL, {rule(false)}, UNDEFINED, UNDEFINED)
     end
 
     def self.new(symbols : Set(Char), *args)
@@ -92,53 +97,11 @@ module Panini
         @max_string_size = size if size > @max_string_size
       end
 
-      @criterion = Rule.new{|s| members.includes? s }
+      @rules = {rule(members.includes? string)}
     end
 
-    def initialize(@alphabet, @criterion, @min_string_size, @max_string_size = INFINITY)
+    def initialize(@alphabet, @rules, @min_string_size, @max_string_size = INFINITY)
     end
-
-
-    # def initialize
-    #   @alphabet = Alphabet::NIL
-    #   @min_string_size = UNDEFINED
-    #   @max_string_size = UNDEFINED
-
-    #   @criterion = ->(string : String) { false }
-    # end
-
-    # def initialize(criterion : String -> Bool)
-    #   @alphabet = Alphabet::NIL
-    #   @min_string_size = 0
-    #   @max_string_size = INFINITY
-    #   @criterion = block
-    # end
-
-
-    # def initialize(@alphabet, @min_string_size, &block : String -> Bool)
-    #   @max_string_size = INFINITY
-    #   @criterion = block
-    # end
-
-    # def initialize(@alphabet, @min_string_size, @max_string_size, &block : String -> Bool)
-    #   @criterion = block
-    # end
-
-    # def initialize(@alphabet, @members)
-    #   members = @members
-    #   raise ArgumentError.new("Initialize attempted for membered lang without members") if members.nil?
-
-    #   unless members.all?{|m| @alphabet.defines? m }
-    #     raise ArgumentError.new("Alphabet #{@alphabet} does not enclose all member string #{members}}")
-    #   end
-
-    #   sizes = members.map &.size
-    #   @min_string_size = sizes.min? || Int32::MAX
-    #   @max_string_size = sizes.max? || Int32::MIN
-
-    #   # no members while constructing means that more members will be added
-    #   @criterion = ->(string : String) : Bool { members.includes? string }
-    # end
 
     @[AlwaysInline]
     private def in_range(string_len)
@@ -148,10 +111,9 @@ module Panini
 
     def includes?(string : String)
       return false unless in_range string.size
-      # return false unless @min_string_size <= string.size <= @max_string_size
 
-      @criterion.call(string).tap do |included|
-        raise ArgumentError.new("min and max limits conflict with the block output") if included && !(in_range string.size)
+      (@rules.all? &.call(string)).tap do |included|
+        raise ArgumentError.new("min_string_size and max_string_size limits conflict with the block output") if included && !(in_range string.size)
       end
     end
 
@@ -168,7 +130,7 @@ module Panini
       other_members = other.members
 
       if members.nil? || other_members.nil?
-        Language.new({@min_string_size, other.min}.min, {@max_string_size, other.max}.max) do |string|
+        Language.new({@min_string_size, other.min_string_size}.min, {@max_string_size, other.max_string_size}.max) do |string|
           (self.includes? string) || (other.includes? string)
         end
       else
@@ -182,11 +144,11 @@ module Panini
       other_members = other.members
 
       if self_members.nil? || other_members.nil?
-        concatanation_min = self.min + other.min
-        concatanation_max = ([self.max, other.max].includes? INFINITY) ? INFINITY : self.max + other.max
+        concatanation_min = self.min_string_size + other.min_string_size
+        concatanation_max = ([self.max_string_size, other.max_string_size].includes? INFINITY) ? INFINITY : self.max_string_size + other.max_string_size
 
         Language.new(concatanation_min, concatanation_max) do |string|
-          concatenation_boundary_range = self.min..string.size-other.min
+          concatenation_boundary_range = self.min_string_size..string.size-other.min_string_size
           concatenation_boundary_range.any? do |i|
             (self.includes? string[0...i]) && (other.includes? string[i..-1])
           end
