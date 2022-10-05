@@ -40,45 +40,46 @@ module Panini
   alias Lang = Language
 
   struct Language
-    alias Rule = String -> Bool
-
-    macro rule(condition)
-      Rule.new {|string| {{condition}} }
-    end
-
     INFINITY = Int32::MAX
     UNDEFINED = Int32::MIN
 
     PHI = Lang.new
     EPSILON = Lang.from Alphabet::EPSILON
 
-    getter members : Set(String)?
+    private REJECT_ALL = ->(string : String) {false}
+    private NO_MEMBERS = Set(String).new
+
+    getter members : Set(String)
     getter min_string_size : Int32
     getter max_string_size : Int32
     @alphabet : Alphabet
-    @rules : Tuple(Rule)
+    @criterion : String -> Bool
 
     def self.from(*strings : String)
       symbols = strings.reduce(Set(Char).new) do |acc, string|
         acc.concat string.chars
       end
 
-      new(symbols, strings.to_set)
+      new(strings.to_set, Alphabet.new(symbols))
     end
 
     def self.new
-      new(Alphabet::NIL, {rule(false)}, UNDEFINED, UNDEFINED)
+      new(REJECT_ALL, Alphabet::NIL, UNDEFINED, UNDEFINED)
     end
 
-    def self.new(symbols : Set(Char), *args)
-      new(Alphabet.new(symbols), *args)
+    def self.new(membership, *args : Int32)
+      new(membership, Alphabet::NIL, *args)
     end
 
-    def self.new(symbols : Tuple, *args)
-      new((Alphabet.from *symbols), *args)
+    def self.new(membership, alphabet : Tuple, *args : Int32)
+      new(membership, (Alphabet.from *alphabet), *args)
     end
 
-    def initialize(@alphabet, @members)
+    def self.new(criterion : String -> Bool, alphabet : Tuple, **named_args)
+      new(criterion, (Alphabet.from *alphabet), **named_args)
+    end
+
+    def initialize(@members : Set(String), @alphabet)
       members = @members
       if members.nil?
         raise ArgumentError.new("Initialize attempted for membered lang without members")
@@ -97,10 +98,11 @@ module Panini
         @max_string_size = size if size > @max_string_size
       end
 
-      @rules = {rule(members.includes? string)}
+      @criterion = REJECT_ALL
     end
 
-    def initialize(@alphabet, @rules, @min_string_size, @max_string_size = INFINITY)
+    def initialize(@criterion : String -> Bool, @alphabet = Alphabet::NIL, @min_string_size = 0, @max_string_size = INFINITY)
+      @members = NO_MEMBERS
     end
 
     @[AlwaysInline]
@@ -110,98 +112,66 @@ module Panini
     end
 
     def includes?(string : String)
-      return false unless in_range string.size
+      return false unless (in_range string.size)
 
-      (@rules.all? &.call(string)).tap do |included|
-        raise ArgumentError.new("min_string_size and max_string_size limits conflict with the block output") if included && !(in_range string.size)
+      unless @alphabet == Alphabet::NIL
+        return false unless @alphabet.defines? string
       end
-    end
 
-    def size
-      members = @members
-      return members.size unless members.nil?
-
-      INFINITY
+      (@members.includes? string) || @criterion.call(string)
     end
 
     # union
     def |(other : Language)
-      members = @members
-      other_members = other.members
-
-      if members.nil? || other_members.nil?
-        Language.new({@min_string_size, other.min_string_size}.min, {@max_string_size, other.max_string_size}.max) do |string|
-          (self.includes? string) || (other.includes? string)
-        end
-      else
-        Language.new(members | other_members)
-      end
+      Language.new(
+        ->(s : String) {(self.includes? s) || (other.includes? s)},
+        Alphabet::NIL,
+        {@min_string_size, other.min_string_size}.min,
+        {@max_string_size, other.max_string_size}.max
+      )
     end
 
     # concatenation
     def +(other : Language)
-      self_members = self.members
-      other_members = other.members
+      concatanation_min = self.min_string_size + other.min_string_size
+      concatanation_max = self.max_string_size == INFINITY || other.max_string_size == INFINITY ?
+                            INFINITY :
+                            self.max_string_size + other.max_string_size
 
-      if self_members.nil? || other_members.nil?
-        concatanation_min = self.min_string_size + other.min_string_size
-        concatanation_max = ([self.max_string_size, other.max_string_size].includes? INFINITY) ? INFINITY : self.max_string_size + other.max_string_size
-
-        Language.new(concatanation_min, concatanation_max) do |string|
-          concatenation_boundary_range = self.min_string_size..string.size-other.min_string_size
-          concatenation_boundary_range.any? do |i|
-            (self.includes? string[0...i]) && (other.includes? string[i..-1])
-          end
+      criterion = ->(s : String) do
+        concatenation_boundary_range = self.min_string_size..s.size-other.min_string_size
+        concatenation_boundary_range.any? do |i|
+          (self.includes? s[0...i]) && (other.includes? s[i..-1])
         end
-      else
-        concatenated_members = Set(String).new
-        self_members.each do |m1|
-          other_members.each do |m2|
-            concatenated_members << "#{m1}#{m2}"
-          end
-        end
-        Language.new(concatenated_members)
       end
+
+      Language.new(criterion, concatanation_min, concatanation_max)
     end
 
-    # TODO: this may take lot of memory if n is huge
     def **(n)
-      (0...n-1).reduce(self) do |acc|
-        acc + self
-      end
+      (0...n-1).reduce self, &.+(self)
     end
 
+    @[AlwaysInline]
+    private def power_max_string_size(exponent)
+      @max_string_size == INFINITY ? @max_string_size : @max_string_size * exponent
+    end
+
+    # for string_len = 9, min = 2 | 0, max = 5 | infi
+    # min 2, max 5 (2..4)
+    # min 2, max infi ((1)..4)
+    # min 0, max 5 (2..(9))
+    # min 0, max infi ((1)..(9))
     private def enclosing_exponent_range(string_len)
-      return @min_string_size..INFINITY if @max_string_size == INFINITY
+      enclosing_start = @max_string_size == INFINITY ? 1 : (string_len / @max_string_size).ceil.to_i
+      enclosing_end = @min_string_size == 0 ? string_len : string_len // @min_string_size
 
-      limits = Array(Int32).new(initial_capacity: 2)
-      exponent = 0
-      loop do
-        # TODO: hadndle cases when @max_string_size = INFINITY
-        enclosed = @min_string_size * exponent <= string_len <= @max_string_size * exponent
-        limits << exponent if enclosed && limits.empty?
-
-        return (limits[0]..) if @min_string_size == 0
-
-        if !enclosed && limits.size == 1
-          limits << exponent-1
-          return limits[0]..limits[1]
-        end
-      end
+      enclosing_start..enclosing_end
     end
 
     # closure
     def ~
-      Language.new do |string|
-        exponent_range =  enclosing_exponent_range(string.size)
-        if exponent_range.end.nil?
-          exponent_range = exponent_range.begin..exponent_range.begin+10
-        end
-
-        exponent_range.any? do |i|
-          (self ** i).includes? string
-        end
-      end
+      Language.new(->(s : String) { enclosing_exponent_range(s.size).any?{|i| (self ** i).includes? s } })
     end
   end
 
