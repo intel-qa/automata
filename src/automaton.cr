@@ -1,6 +1,7 @@
 require "string_pool"
 
 module Panini::Automaton
+  EPSILON = Char::ZERO
   private SINK_STATE = "sink_state"
 
   module Helper
@@ -13,12 +14,12 @@ module Panini::Automaton
     @pool = StringPool.new
 
     @[AlwaysInline]
-    private def pool(string : String)
+    private def inventorize(string : String)
       @pool.get string
     end
 
     @[AlwaysInline]
-    private def pool(strings : Set(String))
+    private def inventorize(strings : Set(String))
       strings.map{|s| @pool.get s }.to_set
     end
 
@@ -77,7 +78,7 @@ module Panini::Automaton
     private def preprocess(transitions, next_state_type : T.class = typeof(transitions.first[1].first[1])) forall T
       Hash(State, Hash(Char, T)).new{ Hash(Char, T).new{T.new} }.merge! transitions.map {|state, inputs_next_state_mapping|
         transitions_for_state = inputs_next_state_mapping.reduce Hash(Char, T).new{T.new} do |acc, (inputs, next_state)|
-          next_state = pool next_state
+          next_state = inventorize next_state
 
           mapping = inputs.is_a?(Array) ?
             inputs.map {|sym| {sym, next_state} }.to_h :
@@ -86,7 +87,7 @@ module Panini::Automaton
           acc.merge! mapping
         end
 
-        {pool(state), transitions_for_state}
+        {(inventorize state), transitions_for_state}
       }.to_h
     end
 
@@ -139,11 +140,11 @@ module Panini::Automaton
     end
 
     def initialize(states, @symbols, transitions, start_state, accepting_states)
-      @states = pool states
-      @start = pool start_state
+      @states = inventorize states
+      @start = inventorize start_state
       assert_valid_start_state
 
-      @acceptors = pool accepting_states
+      @acceptors = inventorize accepting_states
       assert_valid_accepting_states
 
       @transitions = preprocess transitions
@@ -201,11 +202,11 @@ module Panini::Automaton
     end
 
     def initialize(states, @symbols, transitions, start_state, accepting_states)
-      @states = pool states
-      @start = pool start_state
+      @states = inventorize states
+      @start = inventorize start_state
       assert_valid_start_state
 
-      @acceptors = pool accepting_states
+      @acceptors = inventorize accepting_states
       assert_valid_accepting_states
 
       @transitions = preprocess transitions

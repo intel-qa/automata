@@ -1,4 +1,5 @@
-require "./finite"
+require "./automaton"
+require "./language"
 
 # TODO: Write documentation for `Panini`
 module Panini
@@ -6,5 +7,4 @@ module Panini
 
   alias State = String
 
-  EPSILON = Char::ZERO
 end

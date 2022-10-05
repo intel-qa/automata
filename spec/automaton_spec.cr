@@ -269,10 +269,10 @@ describe Panini::Automaton::NonDeterministic do
           states = Set{"q0", "q1", "q2", "q3", "q4", "q5"}
           symbols = "0123456789.+-".chars.to_set
           transitions = {
-            "q0" => {"+-".chars => Set{"q1"}, Panini::EPSILON => Set{"q1"}},
+            "q0" => {"+-".chars => Set{"q1"}, Panini::Automaton::EPSILON => Set{"q1"}},
             "q1" => {'.' => Set{"q2"}, "0123456789".chars => Set{"q1", "q4"}},
             "q2" => {"0123456789".chars => Set{"q3"}},
-            "q3" => {"0123456789".chars => Set{"q3"}, Panini::EPSILON => Set{"q5"}, },
+            "q3" => {"0123456789".chars => Set{"q3"}, Panini::Automaton::EPSILON => Set{"q5"}, },
             "q4" => {'.' => Set{"q3"}},
           }
 
@@ -287,10 +287,10 @@ describe Panini::Automaton::NonDeterministic do
           states = Set{"q0", "q1", "q2", "q3", "q4", "q5"}
           symbols = "0123456789.+-".chars.to_set
           transitions = {
-            "q0" => {"+-".chars => Set{"q1"}, Panini::EPSILON => Set{"q1"}},
+            "q0" => {"+-".chars => Set{"q1"}, Panini::Automaton::EPSILON => Set{"q1"}},
             "q1" => {'.' => Set{"q2"}, "0123456789".chars => Set{"q1", "q4"}},
             "q2" => {"0123456789".chars => Set{"q3"}},
-            "q3" => {"0123456789".chars => Set{"q3"}, Panini::EPSILON => Set{"q5"}, },
+            "q3" => {"0123456789".chars => Set{"q3"}, Panini::Automaton::EPSILON => Set{"q5"}, },
             "q4" => {'.' => Set{"q3"}},
           }
 
@@ -305,10 +305,10 @@ describe Panini::Automaton::NonDeterministic do
           states = Set{"q0", "q1", "q2", "q3", "q4", "q5"}
           symbols = "0123456789.+-".chars.to_set
           transitions = {
-            "q0" => {"+-".chars => Set{"q1"}, Panini::EPSILON => Set{"q1"}},
+            "q0" => {"+-".chars => Set{"q1"}, Panini::Automaton::EPSILON => Set{"q1"}},
             "q1" => {'.' => Set{"q2"}, "0123456789".chars => Set{"q1", "q4"}},
             "q2" => {"0123456789".chars => Set{"q3"}},
-            "q3" => {"0123456789".chars => Set{"q3"}, Panini::EPSILON => Set{"q11"}},
+            "q3" => {"0123456789".chars => Set{"q3"}, Panini::Automaton::EPSILON => Set{"q11"}},
             "q4" => {'.' => Set{"q3"}},
           }
 
@@ -323,10 +323,10 @@ describe Panini::Automaton::NonDeterministic do
           states = Set{"q0", "q1", "q2", "q3", "q4", "q5"}
           symbols = "0123456789.+-".chars.to_set
           transitions = {
-            "q0" => {"+-".chars => Set{"q1"}, Panini::EPSILON => Set{"q1"}},
+            "q0" => {"+-".chars => Set{"q1"}, Panini::Automaton::EPSILON => Set{"q1"}},
             "q1" => {'.' => Set{"q2"}, "0123456789".chars => Set{"q1", "q4"}},
             "q2" => {"0123456789".chars => Set{"q3"}},
-            "q3" => {"0123456789".chars => Set{"q3"}, Panini::EPSILON => Set{"q11"}},
+            "q3" => {"0123456789".chars => Set{"q3"}, Panini::Automaton::EPSILON => Set{"q11"}},
             "q4" => {'.' => Set{"q3"}},
           }
 
@@ -359,11 +359,11 @@ describe Panini::Automaton::NonDeterministic do
         states = Set{"1", "2", "3", "4", "5", "6", "7"}
         symbols = Set{'a', 'b'}
         transitions = {
-          "1" => {Panini::EPSILON => Set{"2", "4"}},
-          "2" => {Panini::EPSILON => Set{"3"}},
-          "3" => {Panini::EPSILON => Set{"6"}},
+          "1" => {Panini::Automaton::EPSILON => Set{"2", "4"}},
+          "2" => {Panini::Automaton::EPSILON => Set{"3"}},
+          "3" => {Panini::Automaton::EPSILON => Set{"6"}},
           "4" => {'a' => Set{"5"}},
-          "5" => {'b' => Set{"6"}, Panini::EPSILON => Set{"7"}},
+          "5" => {'b' => Set{"6"}, Panini::Automaton::EPSILON => Set{"7"}},
         }
 
         nfa = Automaton::NonDeterministic.new(states, symbols, transitions, Set{"1"}, Set{"6"})
@@ -419,10 +419,10 @@ describe Panini::Automaton::NonDeterministic do
           states = Set{"q0", "q1", "q2", "q3", "q4", "q5"}
           symbols = "0123456789.+-".chars.to_set
           transitions = {
-            "q0" => {"+-".chars => Set{"q1"}, Panini::EPSILON => Set{"q1"}},
+            "q0" => {"+-".chars => Set{"q1"}, Panini::Automaton::EPSILON => Set{"q1"}},
             "q1" => {'.' => Set{"q2"}, "0123456789".chars => Set{"q1", "q4"}},
             "q2" => {"0123456789".chars => Set{"q3"}},
-            "q3" => {"0123456789".chars => Set{"q3"}, Panini::EPSILON => Set{"q5"}},
+            "q3" => {"0123456789".chars => Set{"q3"}, Panini::Automaton::EPSILON => Set{"q5"}},
             "q4" => {'.' => Set{"q3"}},
           }
 
@@ -450,10 +450,10 @@ describe Panini::Automaton::NonDeterministic do
           states = Set{"q0", "q1", "q2", "q3", "q4", "q5"}
           symbols = "0123456789.+-".chars.to_set
           transitions = {
-            "q0" => {"+-".chars => Set{"q1"}, Panini::EPSILON => Set{"q1"}},
+            "q0" => {"+-".chars => Set{"q1"}, Panini::Automaton::EPSILON => Set{"q1"}},
             "q1" => {'.' => Set{"q2"}, "0123456789".chars => Set{"q1", "q4"}},
             "q2" => {"0123456789".chars => Set{"q3"}},
-            "q3" => {"0123456789".chars => Set{"q3"}, Panini::EPSILON => Set{"q5"}},
+            "q3" => {"0123456789".chars => Set{"q3"}, Panini::Automaton::EPSILON => Set{"q5"}},
             "q4" => {'.' => Set{"q3"}},
           }
 
@@ -517,10 +517,10 @@ describe Panini::Automaton::NonDeterministic do
           states = Set{"q0", "q1", "q2", "q3", "q4", "q5"}
           symbols = "0123456789.+-".chars.to_set
           transitions = {
-            "q0" => {"+-".chars => Set{"q1"}, Panini::EPSILON => Set{"q1"}},
+            "q0" => {"+-".chars => Set{"q1"}, Panini::Automaton::EPSILON => Set{"q1"}},
             "q1" => {'.' => Set{"q2"}, "0123456789".chars => Set{"q1", "q4"}},
             "q2" => {"0123456789".chars => Set{"q3"}},
-            "q3" => {"0123456789".chars => Set{"q3"}, Panini::EPSILON => Set{"q5"}},
+            "q3" => {"0123456789".chars => Set{"q3"}, Panini::Automaton::EPSILON => Set{"q5"}},
             "q4" => {'.' => Set{"q3"}},
           }
 
@@ -534,10 +534,10 @@ describe Panini::Automaton::NonDeterministic do
           states = Set{"q0", "q1", "q2", "q3", "q4", "q5"}
           symbols = "0123456789.+-".chars.to_set
           transitions = {
-            "q0" => {"+-".chars => Set{"q1"}, Panini::EPSILON => Set{"q1"}},
+            "q0" => {"+-".chars => Set{"q1"}, Panini::Automaton::EPSILON => Set{"q1"}},
             "q1" => {'.' => Set{"q2"}, "0123456789".chars => Set{"q1", "q4"}},
             "q2" => {"0123456789".chars => Set{"q3"}},
-            "q3" => {"0123456789".chars => Set{"q3"}, Panini::EPSILON => Set{"q5"}},
+            "q3" => {"0123456789".chars => Set{"q3"}, Panini::Automaton::EPSILON => Set{"q5"}},
             "q4" => {'.' => Set{"q3"}},
           }
 
@@ -551,10 +551,10 @@ describe Panini::Automaton::NonDeterministic do
           states = Set{"q0", "q1", "q2", "q3", "q4", "q5"}
           symbols = "0123456789.+-".chars.to_set
           transitions = {
-            "q0" => {"+-".chars => Set{"q1"}, Panini::EPSILON => Set{"q1"}},
+            "q0" => {"+-".chars => Set{"q1"}, Panini::Automaton::EPSILON => Set{"q1"}},
             "q1" => {'.' => Set{"q2"}, "0123456789".chars => Set{"q1", "q4"}},
             "q2" => {"0123456789".chars => Set{"q3"}},
-            "q3" => {"0123456789".chars => Set{"q3"}, Panini::EPSILON => Set{"q5"}},
+            "q3" => {"0123456789".chars => Set{"q3"}, Panini::Automaton::EPSILON => Set{"q5"}},
             "q4" => {'.' => Set{"q3"}},
           }
 
@@ -568,10 +568,10 @@ describe Panini::Automaton::NonDeterministic do
           states = Set{"q0", "q1", "q2", "q3", "q4", "q5"}
           symbols = "0123456789.+-".chars.to_set
           transitions = {
-            "q0" => {"+-".chars => Set{"q1"}, Panini::EPSILON => Set{"q1"}},
+            "q0" => {"+-".chars => Set{"q1"}, Panini::Automaton::EPSILON => Set{"q1"}},
             "q1" => {'.' => Set{"q2"}, "0123456789".chars => Set{"q1", "q4"}},
             "q2" => {"0123456789".chars => Set{"q3"}},
-            "q3" => {"0123456789".chars => Set{"q3"}, Panini::EPSILON => Set{"q5"}},
+            "q3" => {"0123456789".chars => Set{"q3"}, Panini::Automaton::EPSILON => Set{"q5"}},
             "q4" => {'.' => Set{"q3"}},
           }
 
@@ -612,10 +612,10 @@ describe Panini::Automaton::NonDeterministic do
         states = Set{"q0", "q1", "q2", "q3", "q4", "q5"}
         symbols = "0123456789.+-".chars.to_set
         transitions = {
-          "q0" => {"+-".chars => Set{"q1"}, Panini::EPSILON => Set{"q1"}},
+          "q0" => {"+-".chars => Set{"q1"}, Panini::Automaton::EPSILON => Set{"q1"}},
           "q1" => {'.' => Set{"q2"}, "0123456789".chars => Set{"q1", "q4"}},
           "q2" => {"0123456789".chars => Set{"q3"}},
-          "q3" => {"0123456789".chars => Set{"q3"}, Panini::EPSILON => Set{"q5"}},
+          "q3" => {"0123456789".chars => Set{"q3"}, Panini::Automaton::EPSILON => Set{"q5"}},
           "q4" => {'.' => Set{"q3"}},
         }
 
@@ -694,9 +694,9 @@ describe Panini::Automaton do
     states = "pqr".split("").to_set
     symbols = "ab".chars.to_set
     transitions = {
-      "p" => {Panini::EPSILON => Set{"r"}, 'a' => Set{"q"}, 'b' => Set{"p", "r"}},
+      "p" => {Panini::Automaton::EPSILON => Set{"r"}, 'a' => Set{"q"}, 'b' => Set{"p", "r"}},
       "q" => {'a' => Set{"p"}},
-      "r" => {Panini::EPSILON => Set{"p", "q"}, 'a' => Set{"r"}, 'b' => Set{"p"}},
+      "r" => {Panini::Automaton::EPSILON => Set{"p", "q"}, 'a' => Set{"r"}, 'b' => Set{"p"}},
     }
 
     e_nfa = Automaton::NonDeterministic.new(states, symbols, transitions, Set{"p"}, Set{"r"})
@@ -714,7 +714,7 @@ describe Panini::Automaton do
     states = "pqr".split("").to_set
     symbols = "abc".chars.to_set
     transitions = {
-      "p" => {Panini::EPSILON => Set{"q", "r"}, 'b' => Set{"q"}, 'c' => Set{"r"}},
+      "p" => {Panini::Automaton::EPSILON => Set{"q", "r"}, 'b' => Set{"q"}, 'c' => Set{"r"}},
       "q" => {'a' => Set{"p"}, 'c' => Set{"p", "q"}, 'b' => Set{"r"}},
     }
 
