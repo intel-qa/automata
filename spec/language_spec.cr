@@ -62,72 +62,38 @@ describe Panini::Language do
     end
   end
 
-  describe "#initialize" do
-    context "as array-like literal" do
-      context "with a single symbol" do
-        it "initializes a language of size 1", focus: false do
-          lang_a = Lang.from "a"
-          (lang_a.includes? "a").should be_true
-          (lang_a.includes? "b").should be_false
+  describe ".from" do
+    context "strings" do
+      it "creates a new language" do
+        lang_a = Lang.from "ab", "b", "1001"
 
-          lang_a.min_string_size.should eq 1_u16
-          lang_a.max_string_size.should eq 1_u16
-        end
-      end
-
-      context "with a many symbols" do
-        it "initializes a language of size 3" do
-          lang_a = Lang.from "ab", "b", "1001"
-
-          (lang_a.includes? "1001").should be_true
-          (lang_a.includes? "101").should be_false
-          (lang_a.includes? "ab").should be_true
-          (lang_a.includes? "b").should be_true
-          (lang_a.includes? "a").should be_false
-
-          lang_a.min_string_size.should eq 1_u16
-          lang_a.max_string_size.should eq 4_u16
-        end
+        (lang_a.includes? "1001").should be_true
+        (lang_a.includes? "101").should be_false
+        (lang_a.includes? "ab").should be_true
+        (lang_a.includes? "b").should be_true
+        (lang_a.includes? "a").should be_false
       end
     end
 
-    context "with new" do
-      context "with one symbol" do
-        it "initializes a language of size 1" do
-          lang_a = Language.from "a"
-          (lang_a.includes? "a").should be_true
-          (lang_a.includes? "b").should be_false
+    context "criterion" do
+      it "initializes a language", focus: false do
+        lang_1x = Lang.from ->(s : String) {s.size > 1 && s[-2] == '1' && s.chars.all?{|c| c == '0' || c == '1' }}
 
-          lang_a.min_string_size.should eq 1_u16
-          lang_a.max_string_size.should eq 1_u16
-        end
+        (lang_1x.includes? "10").should be_true
+        (lang_1x.includes? "101").should be_false
+        (lang_1x.includes? "1010110").should be_true
+        (lang_1x.includes? "1010100").should be_false
       end
+    end
 
-      context "with 3 symbols" do
-        it "initializes a language of size 3" do
-          a_lang = Language.from "ab", "b", "1001"
-          (a_lang.includes? "1001").should be_true
-          (a_lang.includes? "101").should be_false
-          (a_lang.includes? "ab").should be_true
-          (a_lang.includes? "a").should be_false
+    context "symbols" do
+      it "initializes a language", focus: false do
+        lang_1x = Lang.from '0', '1'
 
-          a_lang.min_string_size.should eq 1_u16
-          a_lang.max_string_size.should eq 4_u16
-        end
-      end
-
-      context "with a block" do
-        it "initializes a language of size infinity", focus: false do
-          lang_1x = Lang.new(->(s : String) {s[-2] == '1'}, {'0', '1'}, 2)
-
-          (lang_1x.includes? "10").should be_true
-          (lang_1x.includes? "101").should be_false
-          (lang_1x.includes? "1010110").should be_true
-          (lang_1x.includes? "1010100").should be_false
-
-          lang_1x.min_string_size.should eq 2_u16
-          lang_1x.max_string_size.should eq Panini::Language::INFINITY
-        end
+        (lang_1x.includes? "10").should be_true
+        (lang_1x.includes? "101").should be_true
+        (lang_1x.includes? "1010110").should be_true
+        (lang_1x.includes? "10100").should be_true
       end
     end
   end
@@ -147,8 +113,14 @@ describe Panini::Language do
 
     context "for 2 non-membered languages" do
       it "finds the union" do
-        lang1 = Lang.new(->(s : String) {s[0] == '0' && s[1..] == "1" * (s.size - 1)}, 1)
-        lang2 = Lang.new(->(s : String) {s[0] == '1' && s[1..] == "0" * (s.size - 1)}, 1)
+        lang1 = Lang.new(
+          min_size: 1,
+          criterion: ->(s : String) {s[0] == '0' && s[1..] == "1" * (s.size - 1)}
+        )
+        lang2 = Lang.new(
+          min_size: 1,
+          criterion: ->(s : String) {s[0] == '1' && s[1..] == "0" * (s.size - 1)}
+        )
 
         lang_union = lang1 | lang2
 
@@ -156,14 +128,17 @@ describe Panini::Language do
           (lang_union.includes? string).should be_true
         end
 
-        (lang_union.includes? "010").should be_false
+        (lang_union.includes? "truetrue010").should be_false
       end
     end
 
-    context "for a membered and a non-membered languages" do
+    context "for a membered and a non-membered languages", focus: false do
       it "finds the union" do
         lang1 = Lang.from "10", "1010", "101010", "10101010", "1010101010"
-        lang2 = Lang.new(->(s : String) {s[0] == '1' && s[1..] == "0" * (s.size - 1)}, 1)
+        lang2 = Lang.new(
+          criterion: ->(s : String) {s[0] == '1' && s[1..] == "0" * (s.size - 1)},
+          min_size: 1
+        )
 
         lang_union = lang1 | lang2
 
@@ -177,7 +152,7 @@ describe Panini::Language do
   end
 
   describe "#+" do
-    context "for 2 membered languages" do
+    context "for 2 languages with membership" do
       it "finds the concatenation" do
         lang_concat = (Lang.from "01", "0101", "010101", "01010101", "0101010101") + (Lang.from "10", "1010", "101010", "10101010", "1010101010")
 
@@ -189,15 +164,17 @@ describe Panini::Language do
       end
     end
 
-    context "for 2 non-membered languages" do
+    context "for 2 languages with criterion", focus: false do
       it "finds the concatenation", focus: false do
         lang1 = Lang.new(
-          ->(s : String) {s[0] == '0' && s[1..] == "1" * (s.size - 1)},
-          min_string_size: 1
+          criterion: ->(s : String) {s.size > 0 && s[0] == '0' && s[1..] == "1" * (s.size - 1)},
+          min_size: 1
         )
 
-        # puts (lang1.includes? "0111")
-        lang2 = Lang.new(->(s : String) {s[0] == '1' && s[1..] == "0" * (s.size - 1)}, 1)
+        lang2 = Lang.new(
+          criterion: ->(s : String) {s.size > 0 && s[0] == '1' && s[1..] == "0" * (s.size - 1)},
+          min_size: 1
+        )
 
         lang_concat = lang1 + lang2
 
@@ -211,50 +188,148 @@ describe Panini::Language do
       end
     end
 
-    context "for a membered and a non-membered languages" do
+    context "for a membership language and a criterion language", focus: false do
       it "finds the concatenation", focus: false do
         lang1 = Lang.from "10", "1010", "101010", "10101010", "1010101010"
-        lang2 = Lang.new ->(s : String) {s[0] == '1' && s[1..] == "0" * (s.size - 1)}, alphabet: {'0', '1'}, min_string_size: 1
+        lang2 = Lang.new(
+          criterion: ->(s : String) {s[0] == '1' && s[1..] == "0" * (s.size - 1)},
+          min_size: 1
+        )
 
-        lang_union = lang1 + lang2
+        lang_concat = lang1 + lang2
 
         {"101000", "101", "101010100", "10101010"}.each do |string|
-          (lang_union.includes? string).should be_true
+          (lang_concat.includes? string).should be_true
         end
 
         {"10", "0110000", "1", "10000000000"}.each do |string|
-          (lang_union.includes? string).should be_false
+          (lang_concat.includes? string).should be_false
+        end
+      end
+    end
+
+    context "for an epsilon membership language and a criterion language", focus: false do
+      it "finds the concatenation", focus: false do
+        lang1 = Lang.from "", "10", "1010", "101010", "10101010", "1010101010"
+        
+        lang2 = Lang.new(
+          criterion: ->(s : String) {s[0] == '1' && s[1..] == "0" * (s.size - 1)},
+          min_size: 1
+        )
+
+        lang_concat = lang1 + lang2
+
+        {"1000", "101000", "101", "101010100", "10101010"}.each do |string|
+          (lang_concat.includes? string).should be_true
+        end
+
+        {"01010", "0110000", "1001", "100001000000"}.each do |string|
+          (lang_concat.includes? string).should be_false
+        end
+      end
+    end
+
+    context "for a membership language and an epsilon criterion language", focus: false do
+      it "finds the concatenation", focus: false do
+        lang1 = Lang.from "10", "1010", "101010", "10101010", "1010101010"
+        lang2 = Lang.from ->(s : String) {s.size == 0 || s[0] == '0' && s[1..] == "1" * (s.size - 1)}
+
+        lang_concat = lang1 + lang2
+
+        {"10", "100111", "100", "101010100", "10101010"}.each do |string|
+          (lang_concat.includes? string).should be_true
+        end
+
+
+        {"01010", "0110000", "10101", "100001000000"}.each do |string|
+          (lang_concat.includes? string).should be_false
+        end
+      end
+    end
+
+    context "for an epsilon membership language and an epsilon criterion language", focus: false do
+      it "finds the concatenation", focus: false do
+        lang1 = Lang.from "", "10", "1010", "101010", "10101010", "1010101010"
+        lang2 = Lang.from ->(s : String) {s.size == 0 || s[0] == '1' && s[1..] == "0" * (s.size - 1)}
+
+        lang_concat = lang1 + lang2
+
+        {"", "10", "101000", "101", "101010100", "10101010"}.each do |string|
+          (lang_concat.includes? string).should be_true
+        end
+
+        {"0110000", "1001", "100001000000"}.each do |string|
+          (lang_concat.includes? string).should be_false
         end
       end
     end
   end
 
-  describe "#**" do
-    context "for a membered languages" do
-      it "finds concatanation power" do
-        lang = Lang.from "0", "1"
-        lang_power = lang ** 7
+  describe "#**", focus: false do
+    context "for a language with membership", focus: false do
+      it "finds concatanation power > 1" do
+        lang = Lang.from "1", "10", "100", "1000"
+        lang_power = lang ** 3
 
-        {"0101010", "0101001", "1100100", "0000100"}.each do |string|
+        {"110001", "1101000", "1000110", "10010100", "1011"}.each do |string|
           (lang_power.includes? string).should be_true
         end
 
-        {"010101", "010100", "110010010", "00001001001"}.each do |string|
+        {"", "0101010", "0101001", "110010010", "0000100", "1111"}.each do |string|
+          (lang_power.includes? string).should be_false
+        end
+      end
+
+      it "finds concatanation power = 1" do
+        lang = Lang.from "1", "10", "100", "1000"
+        lang_power = lang ** 1
+
+        {"1", "1000", "10", "100"}.each do |string|
+          (lang_power.includes? string).should be_true
+        end
+
+        {"", "11", "010", "101", "105"}.each do |string|
+          (lang_power.includes? string).should be_false
+        end
+      end
+
+      it "finds concatanation power = 0" do
+        lang = Lang.from "1", "10", "100", "1000"
+        lang_power = lang ** 0
+
+        (lang_power.includes? "").should be_true
+        (lang_power.includes? "10").should be_false
+      end
+    end
+
+    context "for an epsilon membership language", focus: false do
+      it "finds concatanation power > 1" do
+        lang = Lang.from "", "1", "10", "100", "1000"
+        lang_power = lang ** 3
+
+        {"111", "110001", "10001010", "100101"}.each do |string|
+          (lang_power.includes? string).should be_true
+        end
+
+        {"0101010", "0101001", "1010101", "110110", "1111"}.each do |string|
           (lang_power.includes? string).should be_false
         end
       end
     end
 
-    context "for a non-membered language" do
-      it "finds concatenation power", focus: false do
-        lang = Lang.new ->(s : String) {s[0] == '0' && s[1..] == "1" * (s.size - 1)}, alphabet: {'0', '1'}, min_string_size: 1
+    context "for a epsilon-language with criterion" do
+      it "finds concatenation power > 1", focus: false do
+        lang = Lang.new(
+          criterion: ->(s : String) {s.size == 0 || s[0] == '0' && s[1..] == "1" * (s.size - 1)},
+          symbols: {'0', '1'}
+        )
         lang_power = lang ** 3
 
-        {"011110110111111", "0111111101110", "00101", "000111", "011100", "011011011", "000"}.each do |string|
+        {"011110110111111", "0111101101", "01010", "011010111", "0111010", "011011011"}.each do |string|
           (lang_power.includes? string).should be_true
         end
 
-        {"1011111", "1000", "10001", "111", "010100", "10101", "0101010"}.each do |string|
+        {"1000", "10001", "111", "010100", "01000", "0101010"}.each do |string|
           (lang_power.includes? string).should be_false
         end
       end
@@ -264,35 +339,47 @@ describe Panini::Language do
   describe "#~" do
     context "for a membered languages" do
       it "finds language closure", focus: false do
-        lang = Lang.from "0", "11"
+        lang = Lang.from "", "0", "11"
         lang_closure = ~lang
 
-        {"0110110", "011110011", "110011011000", "00001100110"}.each do |string|
+        {"", "0110110", "011110011", "110011011000", "00001100110"}.each do |string|
           (lang_closure.includes? string).should be_true
+        end
+
+        {"0111010", "011001", "100101000", "111010010"}.each do |string|
+          (lang_closure.includes? string).should be_false
         end
       end
     end
 
     context "for a non-membered language" do
       it "finds language closure", focus: false do
-        lang = Lang.new ->(s : String) {s[0] == '0' && s[1..] == "1" * (s.size - 1)}, alphabet: {'0', '1'}, min_string_size: 1
+        lang = Lang.new(
+          criterion: ->(s : String) {s[0] == '0' && s[1..] == "1" * (s.size - 1)},
+          symbols: {'0', '1'},
+          min_size: 1
+        )
         lang_closure = ~lang
 
-        {"01010", "011001", "01100101011000", "000010010"}.each do |string|
+        {"", "01010", "011001", "01100101011000", "000010010"}.each do |string|
           (lang_closure.includes? string).should be_true
         end
       end
     end
 
     context "for a language closure" do
-      it "finds its closure", focus: false do
-        lang = Lang.new ->(s : String) {s[0] == '0' && s[1..] == "1" * (s.size - 1)}, alphabet: {'0', '1'}, min_string_size: 1
-        closure_closure = ~~~lang
+      it "finds its recursive closure", focus: false do
+        lang = Lang.new(
+          criterion: ->(s : String) {s[0] == '0' && s[1..] == "1" * (s.size - 1)},
+          min_size: 1
+        )
+        recurive_closure = ~~~~~~~lang
 
-        {"01010", "011001", "01100101011000", "000010010"}.each do |string|
-          (closure_closure.includes? string).should be_true
+        {"", "01010", "011001", "01100101011000", "000010010"}.each do |string|
+          (recurive_closure.includes? string).should be_true
         end
       end
     end
+
   end
 end

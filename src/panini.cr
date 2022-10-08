@@ -1,3 +1,5 @@
+require "string_pool"
+
 require "./automaton"
 require "./language"
 
@@ -7,4 +9,6 @@ module Panini
 
   alias State = String
 
+  #TODO: Use this pool for entire repo. remove any other pools being used
+  POOL = StringPool.new
 end

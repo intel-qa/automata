@@ -3,18 +3,29 @@ module Panini
     EPSILON = ""
     # an empty alphabet used as a dummy placeholder,
     # esp. for PHI and EPSILON languages
+    # also used to denote that alphabet set need
+    # not be used for validating strings for a given language
     NIL = Alphabet.new
     getter powers = {0 => Set{EPSILON}}
     getter symbols : Set(Char)
 
+    # this is a memoization cache
+    @vocabulary = Set(String).new
+
     def self.from(*chars : Char)
       self.new(chars.to_set)
+    end
+
+    def |(other)
+      {{@type}}.new(self.symbols | other.symbols)
     end
 
     def initialize(@symbols = Set(Char).new)
     end
 
     private def calculate_power(exponent)
+      return (@symbols.map &.to_s).to_set if exponent == 1
+
       Set(String).new.tap do |power|
         (self ** (exponent-1)).each do |str_x|
           (self ** 1).each do |str_a|
@@ -25,154 +36,141 @@ module Panini
     end
 
     def **(exponent)
-      return @powers[exponent] if @powers[exponent]?
-      return @powers[exponent] = (@symbols.map &.to_s).to_set if exponent == 1
-
-      @powers[exponent] = calculate_power(exponent)
+      @powers[exponent] ||= calculate_power(exponent)
     end
 
     def defines?(string)
-      return true if string.empty?
-      string.chars.all?{|c| @symbols.includes? c }
+      return true if @vocabulary.includes? string
+
+      string.chars.all?{|c| @symbols.includes? c }.tap do |defined|
+        @vocabulary << string if defined
+      end
     end
   end
 
   alias Lang = Language
 
   struct Language
-    INFINITY = Int32::MAX
-    UNDEFINED = Int32::MIN
+    private INFINITY = Int32::MAX
+    private UNDEFINED = Int32::MIN
+    private NO_MEMBERSHIP = Set(String).new
+    private REJECT_ALL = ->(s : String) {false}
+    private ACCEPT_ALL = ->(s : String) {true}
 
     PHI = Lang.new
     EPSILON = Lang.from Alphabet::EPSILON
 
-    private REJECT_ALL = ->(string : String) {false}
-    private NO_MEMBERS = Set(String).new
+    getter membership : Set(String)
 
-    getter members : Set(String)
-    getter min_string_size : Int32
-    getter max_string_size : Int32
-    @alphabet : Alphabet
-    @criterion : String -> Bool
+    getter criterion = ->(s : String) : Bool {false}
+    getter alphabet : Alphabet
+    getter min_size : Int32
+    getter max_size : Int32
 
-    def self.from(*strings : String)
-      symbols = strings.reduce(Set(Char).new) do |acc, string|
-        acc.concat string.chars
-      end
+    # this is a memoization cache
+    @vocabulary = Set(String).new
+    getter name
 
-      new(strings.to_set, Alphabet.new(symbols))
+    def self.from(*strings : String, name = Random::Secure.hex)
+      new(membership: strings.to_set, name: name)
     end
 
-    def self.new
-      new(REJECT_ALL, Alphabet::NIL, UNDEFINED, UNDEFINED)
+    def self.from(*symbols : Char, name = Random::Secure.hex)
+      new(alphabet: (Alphabet.from *symbols), criterion: ACCEPT_ALL, name: name)
     end
 
-    def self.new(membership, *args : Int32)
-      new(membership, Alphabet::NIL, *args)
+    def self.from(criterion : String -> Bool, name = Random::Secure.hex)
+      new(criterion: criterion, name: name)
     end
 
-    def self.new(membership, alphabet : Tuple, *args : Int32)
-      new(membership, (Alphabet.from *alphabet), *args)
-    end
-
-    def self.new(criterion : String -> Bool, alphabet : Tuple, **named_args)
-      new(criterion, (Alphabet.from *alphabet), **named_args)
-    end
-
-    def initialize(@members : Set(String), @alphabet)
-      members = @members
-      if members.nil?
-        raise ArgumentError.new("Initialize attempted for membered lang without members")
-      end
-
-      unless members.all?{|m| @alphabet.defines? m }
-        raise ArgumentError.new("Alphabet #{@alphabet} does not enclose all member strings #{members}}")
-      end
-
-      @min_string_size = INFINITY
-      @max_string_size = 0
-
-      members.each do |m|
-        size = m.size
-        @min_string_size = size if size < @min_string_size
-        @max_string_size = size if size > @max_string_size
-      end
-
-      @criterion = REJECT_ALL
-    end
-
-    def initialize(@criterion : String -> Bool, @alphabet = Alphabet::NIL, @min_string_size = 0, @max_string_size = INFINITY)
-      @members = NO_MEMBERS
-    end
-
-    @[AlwaysInline]
-    private def in_range(string_len)
-      return false if @min_string_size == UNDEFINED || @max_string_size == UNDEFINED
-      @min_string_size <= string_len <= @max_string_size
-    end
-
-    def includes?(string : String)
-      return false unless (in_range string.size)
-
-      unless @alphabet == Alphabet::NIL
-        return false unless @alphabet.defines? string
-      end
-
-      (@members.includes? string) || @criterion.call(string)
-    end
-
-    # union
-    def |(other : Language)
-      Language.new(
-        ->(s : String) {(self.includes? s) || (other.includes? s)},
-        Alphabet::NIL,
-        {@min_string_size, other.min_string_size}.min,
-        {@max_string_size, other.max_string_size}.max
+    def self.new(
+      *,
+      symbols : Tuple,
+      **named_args
+    )
+      new(
+        **named_args,
+        alphabet: (Alphabet.from *symbols)
       )
     end
 
-    # concatenation
-    def +(other : Language)
-      concatanation_min = self.min_string_size + other.min_string_size
-      concatanation_max = self.max_string_size == INFINITY || other.max_string_size == INFINITY ?
-                            INFINITY :
-                            self.max_string_size + other.max_string_size
-
-      criterion = ->(s : String) do
-        concatenation_boundary_range = self.min_string_size..s.size-other.min_string_size
-        concatenation_boundary_range.any? do |i|
-          (self.includes? s[0...i]) && (other.includes? s[i..-1])
-        end
-      end
-
-      Language.new(criterion, concatanation_min, concatanation_max)
-    end
-
-    def **(n)
-      (0...n-1).reduce self, &.+(self)
+    def initialize(
+      *,
+      @membership = NO_MEMBERSHIP,
+      @criterion = REJECT_ALL,
+      @alphabet = Alphabet::NIL,
+      @min_size = 0,
+      @max_size = INFINITY,
+      @name = Random::Secure.hex
+    )
     end
 
     @[AlwaysInline]
-    private def power_max_string_size(exponent)
-      @max_string_size == INFINITY ? @max_string_size : @max_string_size * exponent
+    def epsilon?
+      includes? ""
     end
 
-    # for string_len = 9, min = 2 | 0, max = 5 | infi
-    # min 2, max 5 (2..4)
-    # min 2, max infi ((1)..4)
-    # min 0, max 5 (2..(9))
-    # min 0, max infi ((1)..(9))
-    private def enclosing_exponent_range(string_len)
-      enclosing_start = @max_string_size == INFINITY ? 1 : (string_len / @max_string_size).ceil.to_i
-      enclosing_end = @min_string_size == 0 ? string_len : string_len // @min_string_size
+    # only membership is inclusion type, rest all are in reality exclusion types
+    # if membership test passes, language contains the string
+    # if other tests fail, language does not contain the string
+    # if all other tests pass, only then language contains the string
+    def includes?(string : String)
+      return true if @vocabulary.includes? string
 
-      enclosing_start..enclosing_end
+      return true if @membership == NO_MEMBERSHIP ? false : @membership.includes? string
+
+      return false unless @min_size == UNDEFINED ? true : string.size >= @min_size
+      return false unless @max_size == UNDEFINED ? true : string.size <= @max_size
+      return false unless @alphabet == Alphabet::NIL ? true : @alphabet.defines? string
+      return false unless @criterion.call string
+
+      @vocabulary << POOL.get string
+      true
+    end
+
+    # union
+    def |(other : self)
+      union_criterion = ->(string : String) do
+        (self.includes? string) || other.includes? string
+      end
+      Language.from criterion: union_criterion, name: "#{@name}|#{other.name}"
+    end
+
+    # concatenation
+    def +(other : self, epsilon_allowed = true)
+      concat_criterion = ->(string : String) do
+        if epsilon_allowed
+          return true if self.epsilon? && other.includes? string
+          return true if other.epsilon? && self.includes? string
+        end
+
+        (1...string.size).any? do |i|
+          (self.includes? string[0...i]) && other.includes? string[i..-1]
+        end
+      end
+      Language.from criterion: concat_criterion, name: "#{@name}+#{other.name}"
+    end
+
+    def **(n, epsilon_allowed = true)
+      raise ArgumentError.new("Begative powers are undefined.") if n < 0
+      return Lang::EPSILON if n == 0
+
+      (1...n).reduce(self, &.+(self, epsilon_allowed))
     end
 
     # closure
     def ~
-      Language.new(->(s : String) { enclosing_exponent_range(s.size).any?{|i| (self ** i).includes? s } })
+      closure_criterion = ->(string : String) do
+        (0..string.size).any? do |i|
+          # epsilon_allowed is given as false to improve performance by preventing duplicate work
+          # when checking inclusion in a closure we check inclusion in the series L**0, L**1, L**2 and so on
+          # for all L's.
+          # epsilon_allowed as true would do this series check for each L**i, thus doing duplicate work.
+          self.**(i, epsilon_allowed: false).includes? string
+        end
+      end
+
+      Language.from criterion: closure_criterion, name: "~#{@name}"
     end
   end
-
 end
