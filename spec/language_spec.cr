@@ -211,7 +211,7 @@ describe Panini::Language do
     context "for an epsilon membership language and a criterion language", focus: false do
       it "finds the concatenation", focus: false do
         lang1 = Lang.from "", "10", "1010", "101010", "10101010", "1010101010"
-        
+
         lang2 = Lang.new(
           criterion: ->(s : String) {s[0] == '1' && s[1..] == "0" * (s.size - 1)},
           min_size: 1

@@ -16,11 +16,11 @@ module Panini
       self.new(chars.to_set)
     end
 
-    def |(other)
-      {{@type}}.new(self.symbols | other.symbols)
+    def initialize(@symbols = Set(Char).new)
     end
 
-    def initialize(@symbols = Set(Char).new)
+    def |(other)
+      {{@type}}.new(self.symbols | other.symbols)
     end
 
     private def calculate_power(exponent)
@@ -122,8 +122,10 @@ module Panini
       return false unless @min_size == UNDEFINED ? true : string.size >= @min_size
       return false unless @max_size == UNDEFINED ? true : string.size <= @max_size
       return false unless @alphabet == Alphabet::NIL ? true : @alphabet.defines? string
-      return false unless @criterion.call string
 
+      return false unless @criterion.call(string)
+
+      # cache found strings for performance
       @vocabulary << POOL.get string
       true
     end
@@ -137,9 +139,9 @@ module Panini
     end
 
     # concatenation
-    def +(other : self, epsilon_allowed = true)
+    def +(other : self, ignore_epsilon = false)
       concat_criterion = ->(string : String) do
-        if epsilon_allowed
+        unless ignore_epsilon
           return true if self.epsilon? && other.includes? string
           return true if other.epsilon? && self.includes? string
         end
@@ -151,22 +153,23 @@ module Panini
       Language.from criterion: concat_criterion, name: "#{@name}+#{other.name}"
     end
 
-    def **(n, epsilon_allowed = true)
-      raise ArgumentError.new("Begative powers are undefined.") if n < 0
+    def **(n, ignore_epsilon = false)
+      raise ArgumentError.new("Negative powers are undefined.") if n < 0
       return Lang::EPSILON if n == 0
 
-      (1...n).reduce(self, &.+(self, epsilon_allowed))
+      (1...n).reduce(self, &.+(self, ignore_epsilon))
     end
 
     # closure
     def ~
       closure_criterion = ->(string : String) do
         (0..string.size).any? do |i|
-          # epsilon_allowed is given as false to improve performance by preventing duplicate work
+          # ignore_epsilon is given as true to improve performance by preventing duplicate work
           # when checking inclusion in a closure we check inclusion in the series L**0, L**1, L**2 and so on
           # for all L's.
-          # epsilon_allowed as true would do this series check for each L**i, thus doing duplicate work.
-          self.**(i, epsilon_allowed: false).includes? string
+          # ignore_epsilon as false would do this series check for each L**i instead once for teh closure,
+          # thus doing duplicate work.
+          self.**(i, ignore_epsilon: true).includes? string
         end
       end
 
