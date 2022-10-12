@@ -2,27 +2,9 @@ require "string_pool"
 
 module Panini::Automaton
   EPSILON = Char::ZERO
-  private SINK_STATE = "sink_state"
-
-  module Helper
-    def self.state_set_to_identifier(states)
-      states.empty? ? SINK_STATE : states.to_a.sort.join("")
-    end
-  end
+  SINK_STATE = "sink_state"
 
   abstract class Finite
-    @pool = StringPool.new
-
-    @[AlwaysInline]
-    private def inventorize(string : String)
-      @pool.get string
-    end
-
-    @[AlwaysInline]
-    private def inventorize(strings : Set(String))
-      strings.map{|s| @pool.get s }.to_set
-    end
-
     @[AlwaysInline]
     private def known?(symbol : Char)
       @symbols.includes?(symbol) || @epsilon_transitions_allowed && epsilon? symbol
@@ -78,7 +60,7 @@ module Panini::Automaton
     private def preprocess(transitions, next_state_type : T.class = typeof(transitions.first[1].first[1])) forall T
       Hash(State, Hash(Char, T)).new{ Hash(Char, T).new{T.new} }.merge! transitions.map {|state, inputs_next_state_mapping|
         transitions_for_state = inputs_next_state_mapping.reduce Hash(Char, T).new{T.new} do |acc, (inputs, next_state)|
-          next_state = inventorize next_state
+          next_state = Helper.inventorize next_state
 
           mapping = inputs.is_a?(Array) ?
             inputs.map {|sym| {sym, next_state} }.to_h :
@@ -87,7 +69,7 @@ module Panini::Automaton
           acc.merge! mapping
         end
 
-        {(inventorize state), transitions_for_state}
+        {(Helper.inventorize state), transitions_for_state}
       }.to_h
     end
 
@@ -112,6 +94,12 @@ module Panini::Automaton
     def accepts?(input_symbols)
       process input_symbols
       current_accepts?
+    rescue e : ArgumentError
+      # if wrong arguments are passed don't throw but return false
+      # this ensures that Language and Automaton have the same behavior
+      false
+    ensure
+      reset
     end
 
     def reset
@@ -140,11 +128,11 @@ module Panini::Automaton
     end
 
     def initialize(states, @symbols, transitions, start_state, accepting_states)
-      @states = inventorize states
-      @start = inventorize start_state
+      @states = Helper.inventorize states
+      @start = Helper.inventorize start_state
       assert_valid_start_state
 
-      @acceptors = inventorize accepting_states
+      @acceptors = Helper.inventorize accepting_states
       assert_valid_accepting_states
 
       @transitions = preprocess transitions
@@ -189,11 +177,11 @@ module Panini::Automaton
   class NonDeterministic < Finite
     getter current : Set(State)
 
-    @states : Set(State)
-    @symbols : Set(Char)
-    @transitions : Hash(State, Hash(Char, Set(State)))
-    @start : Set(State)
-    @acceptors : Set(State)
+    getter states : Set(State)
+    getter symbols : Set(Char)
+    getter transitions : Hash(State, Hash(Char, Set(State)))
+    getter start : Set(State)
+    getter acceptors : Set(State)
     @epsilon_transitions_allowed : Bool
 
     @[AlwaysInline]
@@ -202,11 +190,11 @@ module Panini::Automaton
     end
 
     def initialize(states, @symbols, transitions, start_state, accepting_states)
-      @states = inventorize states
-      @start = inventorize start_state
+      @states = Helper.inventorize states
+      @start = Helper.inventorize start_state
       assert_valid_start_state
 
-      @acceptors = inventorize accepting_states
+      @acceptors = Helper.inventorize accepting_states
       assert_valid_accepting_states
 
       @transitions = preprocess transitions
@@ -237,7 +225,7 @@ module Panini::Automaton
     def epsilon_closure(state_set : Set(State))
       return state_set unless @epsilon_transitions_allowed
 
-      state_set.reduce Set(State).new do |closure_union, state|
+      state_set.reduce(Set(State).new) do |closure_union, state|
         closure_union | epsilon_closure(state)
       end
     end
@@ -246,7 +234,7 @@ module Panini::Automaton
     private def delta(state, input_symbol = EPSILON)
       assert_valid(symbol: input_symbol)
 
-      epsilon_closure(state).reduce Set(State).new do |next_states_union, state|
+      epsilon_closure(state).reduce(Set(State).new) do |next_states_union, state|
         next_states = @transitions[state][input_symbol]
         next_states_union | epsilon_closure(next_states)
       end
@@ -256,8 +244,8 @@ module Panini::Automaton
     private def delta(state, input_symbols : String)
       return epsilon_closure(state) if epsilon? input_symbols
 
-      epsilon_closure(@current).reduce Set(State).new do |next_states_union, state|
-        next_states = delta(state, input_symbols[0..-2]).reduce Set(State).new do |states_union, next_state|
+      epsilon_closure(state).reduce Set(State).new do |next_states_union, state|
+        next_states = delta(state, input_symbols[0..-2]).reduce(Set(State).new) do |states_union, next_state|
           states_union | delta(next_state, input_symbols[-1])
         end
 

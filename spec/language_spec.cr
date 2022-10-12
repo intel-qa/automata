@@ -321,7 +321,7 @@ describe Panini::Language do
       it "finds concatenation power > 1", focus: false do
         lang = Lang.new(
           criterion: ->(s : String) {s.size == 0 || s[0] == '0' && s[1..] == "1" * (s.size - 1)},
-          symbols: {'0', '1'}
+          alphabets: {'0', '1'}
         )
         lang_power = lang ** 3
 
@@ -356,7 +356,7 @@ describe Panini::Language do
       it "finds language closure", focus: false do
         lang = Lang.new(
           criterion: ->(s : String) {s[0] == '0' && s[1..] == "1" * (s.size - 1)},
-          symbols: {'0', '1'},
+          alphabets: {'0', '1'},
           min_size: 1
         )
         lang_closure = ~lang
@@ -380,6 +380,160 @@ describe Panini::Language do
         end
       end
     end
+  end
 
+  describe "#words", focus: false do
+    context "for a language not having alphabet inclusion type" do
+      it "raises exception" do
+        expect_raises Language::AlphabetNotFoundError do
+          Lang::PHI.words(size: 3)
+        end
+
+        expect_raises Language::AlphabetNotFoundError do
+          Lang::EPSILON.words(size: 3)
+        end
+      end
+    end
+
+    context "for a language having alphabet inclusion type" do
+      it "generates words of a given length from a language" do
+        lang = Lang.new(
+          criterion: ->(s : String) {s[0] == '0' && s[1..] == "1" * (s.size - 1)},
+          alphabets: {'0', '1'},
+          min_size: 1
+        )
+
+        lang.words(size: 3).should eq Set{"011"}
+      end
+    end
+  end
+
+  describe "#regular?" do
+    context "for Lang::PHI" do
+      it "detects as regular language" do
+        Lang::PHI.regular?.should be_true
+      end
+    end
+
+    context "for Lang::EPSILON" do
+      it "detects as regular language" do
+        Lang::EPSILON.regular?.should be_true
+      end
+    end
+
+    context "for Language with single symbol" do
+      it "detects as regular language" do
+        (Lang.from "a").regular?.should be_true
+      end
+    end
+
+    context "for a union of regular languages" do
+      it "detects as regular language" do
+        ((Lang.from "a") | Lang.from "b").regular?.should be_true
+      end
+    end
+
+    context "for a concatenation of regular languages" do
+      it "detects as a regular language" do
+        ((Lang.from "a") + Lang.from "b").regular?.should be_true
+      end
+    end
+
+    context "for a closure of regular language" do
+      it "detects as a regular language" do
+        (~(Lang.from "a")).regular?.should be_true
+      end
+    end
+
+  end
+
+  describe "#to_nfa" do
+    context "for Lang::PHI" do
+      it "generates an phi basis NFA" do
+        phi_nfa = Lang::PHI.to_nfa
+        (phi_nfa.accepts? Alphabet::EPSILON).should be_false
+        (phi_nfa.accepts? "a").should be_false
+      end
+    end
+
+    context "for Lang::EPSILON" do
+      it "generates an epsilon basis NFA" do
+        epsilon_nfa = Lang::EPSILON.to_nfa
+        (epsilon_nfa.accepts? Alphabet::EPSILON).should be_true
+        (epsilon_nfa.accepts? "a").should be_false
+      end
+    end
+
+    context "for Language with single symbol" do
+      it "generates an symbol basis NFA" do
+        symbol_nfa = (Lang.from "a").to_nfa
+        (symbol_nfa.accepts? Alphabet::EPSILON).should be_false
+        (symbol_nfa.accepts? "a").should be_true
+      end
+    end
+
+    context "for union Language" do
+      it "generates union NFA", focus: false do
+        union_nfa = ((Lang.from "a") | (Lang.from "b")).to_nfa
+
+        (union_nfa.accepts? Alphabet::EPSILON).should be_false
+
+        (union_nfa.accepts? "a").should be_true
+        (union_nfa.accepts? "b").should be_true
+      end
+    end
+
+    context "for concat Language" do
+      it "generates concat NFA", focus: false do
+        concat_nfa = ((Lang.from "a") + (Lang.from "b")).to_nfa
+
+        (concat_nfa.accepts? Alphabet::EPSILON).should be_false
+        (concat_nfa.accepts? "b").should be_false
+        (concat_nfa.accepts? "a").should be_false
+
+        (concat_nfa.accepts? "ab").should be_true
+      end
+    end
+
+    context "for closure Language" do
+      it "generates closure NFA", focus: false do
+        closure_nfa = (~(Lang.from "a")).to_nfa
+
+        (closure_nfa.accepts? Alphabet::EPSILON).should be_true
+        (closure_nfa.accepts? "b").should be_false
+        (closure_nfa.accepts? "a").should be_true
+
+        (closure_nfa.accepts? "aa").should be_true
+        (closure_nfa.accepts? "ab").should be_false
+
+        (closure_nfa.accepts? "aaaaaaaaa").should be_true
+      end
+    end
+  end
+
+end
+
+describe "Regular Languages", focus: false do
+  # TODO: benchmark code: dfa accpets very quickly compared to nfa, so converting to dfa before checking acceptance
+  it "converts 110(0 + 1)* to nfa", focus: false do
+    l110x = ((Lang.from "1") + (Lang.from "1") + (Lang.from "0") + ~((Lang.from "0") | (Lang.from "1")))
+    match = "11010101"
+
+    nfa_accepts = l110x.to_nfa.to_dfa.accepts? match
+    language_includes = l110x.includes? match
+
+    nfa_accepts.should be_true
+    language_includes.should be_true
+  end
+
+  it "converts (0 + 1)*1011(0 + 1)* to nfa", focus: false do
+    lx1011x = ~((Lang.from "0") | (Lang.from "1")) + (Lang.from "1") + (Lang.from "0") + (Lang.from "1") + (Lang.from "1") + ~((Lang.from "0") | (Lang.from "1"))
+    match = "101111000101110100"
+
+    dfa_accepts = lx1011x.to_nfa.to_dfa.accepts? match
+    language_includes = lx1011x.includes? match
+
+    dfa_accepts.should be_true
+    language_includes.should be_true
   end
 end

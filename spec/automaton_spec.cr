@@ -122,7 +122,7 @@ describe Panini::Automaton::Deterministic do
         }
 
         dfa = Automaton::Deterministic.new(states, symbols, transitions, "q0", Set{"q1"})
-        dfa.accepts?("100101011010").should be_true
+        dfa.process("100101011010")
         dfa.current.should eq "q1"
       end
     end
@@ -598,7 +598,7 @@ describe Panini::Automaton::NonDeterministic do
         "01010".chars.each do |sym|
           nfa.process sym
           dfa.process sym
-          dfa.current.should eq Panini::Automaton::Helper.state_set_to_identifier(nfa.current)
+          dfa.current.should eq Panini::Helper.state_set_to_identifier(nfa.current)
         end
 
         ["000010", "00000001000", "111111111"].each do |input|
@@ -625,7 +625,7 @@ describe Panini::Automaton::NonDeterministic do
         "234.431".chars.each do |sym|
           nfa.process sym
           dfa.process sym
-          dfa.current.should eq Panini::Automaton::Helper.state_set_to_identifier(nfa.current)
+          dfa.current.should eq Panini::Helper.state_set_to_identifier(nfa.current)
         end
 
         ["786", "786.", "7.86", ".786"].each do |input|
@@ -635,7 +635,6 @@ describe Panini::Automaton::NonDeterministic do
     end
   end
 end
-
 
 describe Panini::Automaton do
   it "converts a NFA to DFA 1" do
@@ -706,7 +705,7 @@ describe Panini::Automaton do
       e_nfa.process(sym)
       dfa.process(sym)
 
-      dfa.current.should eq Panini::Automaton::Helper.state_set_to_identifier(e_nfa.current)
+      dfa.current.should eq Panini::Helper.state_set_to_identifier(e_nfa.current)
     end
   end
 
@@ -725,7 +724,7 @@ describe Panini::Automaton do
       e_nfa.process(sym)
       dfa.process(sym)
 
-      dfa.current.should eq Panini::Automaton::Helper.state_set_to_identifier(e_nfa.current)
+      dfa.current.should eq Panini::Helper.state_set_to_identifier(e_nfa.current)
     end
   end
 end
