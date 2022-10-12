@@ -519,7 +519,8 @@ describe "Regular Languages", focus: false do
     l110x = ((Lang.from "1") + (Lang.from "1") + (Lang.from "0") + ~((Lang.from "0") | (Lang.from "1")))
     match = "11010101"
 
-    nfa_accepts = l110x.to_nfa.to_dfa.accepts? match
+    nfa_accepts = l110x.to_dfa.accepts? match
+
     language_includes = l110x.includes? match
 
     nfa_accepts.should be_true
@@ -528,12 +529,54 @@ describe "Regular Languages", focus: false do
 
   it "converts (0 + 1)*1011(0 + 1)* to nfa", focus: false do
     lx1011x = ~((Lang.from "0") | (Lang.from "1")) + (Lang.from "1") + (Lang.from "0") + (Lang.from "1") + (Lang.from "1") + ~((Lang.from "0") | (Lang.from "1"))
-    match = "101111000101110100"
+    input = "101111000101110100"
+    exput = "10011100010100"
 
-    dfa_accepts = lx1011x.to_nfa.to_dfa.accepts? match
-    language_includes = lx1011x.includes? match
+    dfa = lx1011x.to_dfa
+    dfa_accepts = dfa.accepts? input
+    language_includes = lx1011x.includes? input
+
+    dfa_rejects = dfa.accepts? exput
+    language_excludes = lx1011x.includes? exput
 
     dfa_accepts.should be_true
     language_includes.should be_true
+
+    dfa_rejects.should be_false
+    language_excludes.should be_false
+  end
+
+  it "converts 0*10*10*10* to nfa", focus: false do
+    lx1x1x1x = ~(Lang.from "0") + (Lang.from "1") + ~(Lang.from "0") + (Lang.from "1") + ~(Lang.from "0") + (Lang.from "1") + ~(Lang.from "0")
+    input = "0001000001001"
+    exput = "0010001001010"
+
+    dfa = lx1x1x1x.to_dfa
+    dfa_accepts = dfa.accepts? input
+    dfa_rejects = dfa.accepts? exput
+    language_includes = lx1x1x1x.includes? input
+    language_excludes = lx1x1x1x.includes? exput
+
+    dfa_accepts.should be_true
+    dfa_rejects.should be_false
+    language_includes.should be_true
+    language_excludes.should be_false
+  end
+
+  it "converts 1*01*(01*01*)* to nfa", focus: false do
+    lx0x = ~(Lang.from "1") + (Lang.from "0") + ~(Lang.from "1") + ~((Lang.from "0") + ~(Lang.from "1") + (Lang.from "0") + ~(Lang.from "1"))
+    exput = "00010001001"
+    input = "0010001001010"
+
+    dfa = lx0x.to_dfa
+    dfa_accepts = dfa.accepts? input
+    dfa_rejects = dfa.accepts? exput
+    language_includes = lx0x.includes? input
+    language_excludes = lx0x.includes? exput
+
+    dfa_accepts.should be_true
+    dfa_rejects.should be_false
+    language_includes.should be_true
+    language_excludes.should be_false
   end
 end

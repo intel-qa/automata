@@ -319,5 +319,9 @@ module Panini
         accepting_states: Set{nfa_datum[:final]},
       )
     end
+
+    def to_dfa
+      to_nfa.to_dfa
+    end
   end
 end

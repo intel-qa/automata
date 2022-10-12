@@ -86,9 +86,18 @@ module Panini::Automaton
     private abstract def delta(state, input_symbols : String)
     private abstract def current_accepts?
 
-    def process(input)
+    private def move_current_by(input)
       @current = delta(@current, input)
       self
+    end
+
+    def process(input : Char)
+      move_current_by input
+    end
+
+    def process(input : String)
+      input.chars.each {|sym| assert_valid symbol: sym }
+      move_current_by input
     end
 
     def accepts?(input_symbols)
@@ -146,7 +155,7 @@ module Panini::Automaton
 
     # delta
     private def delta(state, input_symbol : Char)
-      assert_valid(symbol: input_symbol)
+      # assert_valid(symbol: input_symbol)
 
       return SINK_STATE if state == SINK_STATE
       @transitions[state][input_symbol]
@@ -156,7 +165,10 @@ module Panini::Automaton
     private def delta(state, input_symbols : String)
       return state if epsilon? input_symbols
 
-      delta(delta(state, input_symbols[0..-2]), input_symbols[-1])
+      # delta(delta(state, input_symbols[0..-2]), input_symbols[-1])
+      input_symbols.chars.reduce(state) do |state, c|
+        delta(state, c)
+      end
     end
 
     private def current_accepts?
